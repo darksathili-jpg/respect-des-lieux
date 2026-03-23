@@ -1,0 +1,1900 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lycée Watteau — Respect des Lieux v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Nunito:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f0f4f8;--sidebar:#fff;--surface:#fff;--surface2:#f7f9fc;
+  --ink:#2c3e50;--ink-light:#5d7080;--ink-muted:#9ab0c0;--border:#dde6ef;
+  --accent:#6c8ebf;--accent-bg:#eaf0f9;
+  --red:#e07070;--red-bg:#fdf0f0;
+  --green:#5aaa80;--green-bg:#edfaf3;
+  --amber:#d4956a;--amber-bg:#fdf3ec;
+  --lav:#8b7fbe;--lav-bg:#f0eefb;
+  --teal:#5aacb0;--teal-bg:#edf8f8;
+  --shadow:0 2px 16px rgba(44,62,80,.06);
+  --shadow-md:0 4px 24px rgba(44,62,80,.10);
+  --r:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;font-size:14px;line-height:1.6}
+
+/* ══ SETUP SCREEN ══ */
+#setup-screen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+#setup-screen.hidden{display:none}
+.setup-card{background:var(--surface);border-radius:20px;padding:40px 44px;max-width:540px;width:100%;box-shadow:var(--shadow-md);border:1px solid var(--border)}
+.setup-logo{font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--ink);margin-bottom:4px}
+.setup-sub{font-size:13px;color:var(--ink-muted);margin-bottom:28px}
+.setup-steps{display:flex;gap:6px;margin-bottom:28px}
+.setup-step{flex:1;height:3px;border-radius:2px;background:var(--border);transition:background .3s}
+.setup-step.done{background:var(--green)}.setup-step.active{background:var(--accent)}
+.setup-section{display:none}.setup-section.active{display:block}
+.setup-title{font-size:16px;font-weight:700;color:var(--ink);margin-bottom:6px}
+.setup-desc{font-size:12px;color:var(--ink-muted);margin-bottom:18px;line-height:1.6}
+.setup-field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.setup-field label{font-size:12px;font-weight:700;color:var(--ink-light)}
+.setup-field input{font-family:'Nunito',sans-serif;font-size:13px;padding:10px 13px;border:1.5px solid var(--border);border-radius:9px;background:var(--surface);color:var(--ink);outline:none;transition:border-color .15s}
+.setup-field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,142,191,.12)}
+.setup-field input.err{border-color:var(--red)}
+.test-result{padding:10px 13px;border-radius:8px;font-size:12px;font-weight:600;margin-top:6px;display:none}
+.test-result.ok{background:var(--green-bg);color:var(--green);display:block}
+.test-result.ko{background:var(--red-bg);color:var(--red);display:block}
+.setup-actions{display:flex;justify-content:space-between;align-items:center;margin-top:22px}
+.setup-hint{font-size:11px;color:var(--ink-muted);line-height:1.5}
+.sql-box{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;margin:10px 0;max-height:160px;overflow-y:auto;white-space:pre;color:var(--ink-light)}
+
+/* ══ STATUS BAR ══ */
+.status-bar{display:flex;align-items:center;gap:6px;padding:5px 16px;font-size:11px;font-weight:700;border-radius:6px;cursor:pointer;transition:background .15s}
+.status-bar:hover{background:var(--surface2)}
+.status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.status-dot.online{background:var(--green)}.status-dot.offline{background:var(--red)}.status-dot.syncing{background:var(--amber);animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.queue-badge{background:var(--amber);color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:2px}
+
+/* ══ LOADING OVERLAY ══ */
+#loading-overlay{position:fixed;inset:0;background:rgba(240,244,248,.9);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+#loading-overlay.hidden{display:none}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ══ APP LAYOUT ══ */
+.app{display:flex;min-height:100vh}
+.sidebar{width:256px;min-width:256px;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;box-shadow:2px 0 12px rgba(44,62,80,.04)}
+.sb-hero{position:relative;height:145px;overflow:hidden;flex-shrink:0}
+.sb-hero img{width:100%;height:100%;object-fit:cover;object-position:center 20%;display:block}
+.sb-hero-ov{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(44,62,80,.1) 0%,rgba(44,62,80,.75) 100%);display:flex;flex-direction:column;justify-content:flex-end;padding:10px 14px 12px}
+.sb-hero-ov h2{font-family:'Playfair Display',serif;font-size:14px;color:#fff;font-weight:700;text-shadow:0 1px 4px rgba(0,0,0,.5);line-height:1.2}
+.sb-hero-ov small{font-size:9px;color:rgba(255,255,255,.8);letter-spacing:.07em;text-transform:uppercase;margin-top:2px;display:block}
+.sb-nav{padding:12px 0;flex:1}
+.nav-grp{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted);padding:10px 18px 4px;font-weight:700}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;font-size:13px;font-weight:500;color:var(--ink-light);transition:background .15s,color .15s;border-left:3px solid transparent;margin-right:10px;border-radius:0 8px 8px 0}
+.nav-item:hover{background:var(--accent-bg);color:var(--accent)}
+.nav-item.active{background:var(--accent-bg);color:var(--accent);border-left-color:var(--accent);font-weight:700}
+.sb-stats{padding:14px;border-top:1px solid var(--border);display:flex;gap:6px}
+.stat-pill{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 4px;text-align:center}
+.sp-val{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:500;color:var(--ink);line-height:1}
+.sp-val.red{color:var(--red)}.sp-val.amb{color:var(--amber)}.sp-val.gr{color:var(--green)}
+.sp-lbl{font-size:9px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:11px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:10;box-shadow:0 1px 8px rgba(44,62,80,.05)}
+.topbar-title{font-family:'Playfair Display',serif;font-size:18px;color:var(--ink);font-weight:700}
+.topbar-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.btn{font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;padding:7px 14px;border-radius:8px;border:none;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
+.btn-primary{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(108,142,191,.3)}
+.btn-primary:hover{background:#5577aa;transform:translateY(-1px)}
+.btn-ghost{background:transparent;color:var(--ink-light);border:1.5px solid var(--border)}
+.btn-ghost:hover{background:var(--surface2)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-green{background:var(--green);color:#fff}.btn-green:hover{background:#4a9070}
+.btn-amber{background:var(--amber);color:#fff}.btn-amber:hover{background:#b8804a}
+.btn-red{background:var(--red);color:#fff}.btn-red:hover{background:#c05858}
+.content{flex:1;padding:20px 24px;overflow-y:auto}
+.section{display:none}.section.active{display:block}
+
+/* ══ KPI ══ */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow);border-top:3px solid transparent;transition:transform .15s}
+.kpi-card:hover{transform:translateY(-2px)}
+.kpi-card.blue{border-top-color:var(--accent)}.kpi-card.red{border-top-color:var(--red)}
+.kpi-card.green{border-top-color:var(--green)}.kpi-card.amber{border-top-color:var(--amber)}
+.kpi-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-muted);font-weight:700;margin-bottom:6px}
+.kpi-val{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:500;line-height:1}
+.kpi-val.blue{color:var(--accent)}.kpi-val.red{color:var(--red)}.kpi-val.green{color:var(--green)}.kpi-val.amber{color:var(--amber)}
+.kpi-sub{font-size:11px;color:var(--ink-muted);margin-top:4px}
+.pbar{height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;margin-top:7px;border:1px solid var(--border)}
+.pbar-fill{height:100%;background:var(--green);border-radius:3px;transition:width .4s}
+
+/* ══ CARDS ══ */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px}
+.card-hd{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2)}
+.card-title{font-family:'Playfair Display',serif;font-size:14px;color:var(--ink);font-weight:600}
+
+/* ══ TABLES ══ */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:var(--surface2);padding:8px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-muted);border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+thead th:hover{color:var(--accent)}
+thead th.sort-asc::after{content:' ▲';font-size:9px}
+thead th.sort-desc::after{content:' ▼';font-size:9px}
+thead th.no-sort{cursor:default}
+thead th.no-sort:hover{color:var(--ink-muted)}
+tbody tr{border-bottom:1px solid var(--surface2);transition:background .1s}
+tbody tr:hover{background:var(--accent-bg)}
+td{padding:9px 12px;vertical-align:middle}
+
+/* ══ BADGES ══ */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.bg{background:var(--red-bg);color:var(--red)}.bm{background:var(--amber-bg);color:var(--amber)}.bmin{background:var(--green-bg);color:var(--green)}
+.bo{background:var(--accent-bg);color:var(--accent)}.br{background:var(--amber-bg);color:var(--amber)}.bc{background:var(--green-bg);color:var(--green)}
+
+/* ══ CHARTS ══ */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.bar-chart{display:flex;flex-direction:column;gap:8px;padding:4px 0}
+.bar-row{display:flex;align-items:center;gap:10px}
+.bar-label{font-size:12px;color:var(--ink-light);width:90px;flex-shrink:0;text-align:right;font-weight:500}
+.bar-track{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;border:1px solid var(--border)}
+.bar-fill{height:100%;border-radius:4px;background:var(--accent);transition:width .6s ease}
+.bar-fill.g{background:var(--green)}.bar-fill.a{background:var(--amber)}.bar-fill.l{background:var(--lav)}.bar-fill.t{background:var(--teal)}
+.bar-count{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-muted);width:20px}
+.month-chart{display:flex;align-items:flex-end;gap:4px;height:80px;padding:0 2px}
+.mc-bar{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-width:12px;position:relative;cursor:default}
+.mc-bar:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:10px;padding:3px 6px;border-radius:4px;white-space:nowrap;font-family:'JetBrains Mono',monospace;pointer-events:none}
+.mc-labels{display:flex;gap:4px;padding:0 2px}
+.mc-lbl{flex:1;font-size:9px;color:var(--ink-muted);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ══ FILTERS ══ */
+.filters{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filters select,.filters input[type=search],.filters input[type=date]{font-family:'Nunito',sans-serif;font-size:12px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;background:var(--surface);color:var(--ink);outline:none;font-weight:500}
+.filters select:focus,.filters input:focus{border-color:var(--accent)}
+.search-inp{min-width:180px}
+
+/* ══ PAGINATION ══ */
+.pagination{display:flex;gap:4px;justify-content:center;padding:12px 0 4px;align-items:center}
+.page-btn{font-family:'Nunito',sans-serif;font-size:12px;font-weight:700;padding:4px 10px;border-radius:6px;border:1.5px solid var(--border);cursor:pointer;background:var(--surface);color:var(--ink-light);transition:all .15s}
+.page-btn:hover{background:var(--accent-bg);color:var(--accent)}
+.page-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.page-btn:disabled{opacity:.35;cursor:default}
+.page-info{font-size:11px;color:var(--ink-muted);padding:0 6px}
+
+/* ══ MODALS ══ */
+.mo{display:none;position:fixed;inset:0;background:rgba(44,62,80,.45);z-index:100;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+.mo.open{display:flex}
+.modal{background:var(--surface);border-radius:16px;width:580px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:var(--shadow-md);animation:sU .2s ease;border:1px solid var(--border)}
+.modal-lg{width:700px}
+@keyframes sU{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.mo-hd{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;background:var(--surface2);border-radius:16px 16px 0 0;position:sticky;top:0;z-index:1}
+.mo-title{font-family:'Playfair Display',serif;font-size:16px;font-weight:700}
+.mo-body{padding:18px 22px}
+.mo-ft{padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:var(--surface2);border-radius:0 0 16px 16px;position:sticky;bottom:0}
+.xbtn{background:none;border:none;cursor:pointer;font-size:20px;color:var(--ink-muted);padding:2px;transition:color .15s}
+.xbtn:hover{color:var(--red)}
+
+/* ══ FORMS ══ */
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fc2{grid-column:1/-1}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:12px;font-weight:700;color:var(--ink-light)}
+.field input,.field select,.field textarea{font-family:'Nunito',sans-serif;font-size:13px;padding:8px 11px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);outline:none;transition:border-color .15s;font-weight:500}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,142,191,.12)}
+.field textarea{resize:vertical;min-height:74px}
+.field-note{font-size:11px;color:var(--amber);font-style:italic;margin-top:2px;font-weight:600}
+.fsep{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-muted);margin:12px 0 6px;padding-bottom:4px;border-bottom:1.5px solid var(--border);grid-column:1/-1}
+
+/* ══ PHOTOS ══ */
+.photo-zone{border:2px dashed var(--border);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .15s;position:relative;background:var(--surface)}
+.photo-zone:hover,.photo-zone.drag{border-color:var(--accent);background:var(--accent-bg)}
+.photo-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.photo-zone-txt{pointer-events:none;font-size:13px;color:var(--ink-muted)}
+.photo-uploading{font-size:12px;color:var(--accent);font-weight:600;margin-top:6px}
+.photo-preview{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.photo-thumb{position:relative;width:80px;height:80px}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+.photo-thumb .del-btn{position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.photo-progress{position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--accent);border-radius:0 0 8px 8px;transition:width .3s}
+
+/* ══ DETAIL ══ */
+.dr{display:flex;gap:8px;align-items:baseline;margin-bottom:8px}
+.dk{font-size:12px;color:var(--ink-muted);font-weight:700;min-width:140px}
+.dv{font-size:13px;color:var(--ink);font-weight:500}
+.tl{border-left:2px solid var(--accent-bg);padding-left:14px;margin-top:8px}
+.tli{position:relative;padding-bottom:12px}
+.tli::before{content:'';position:absolute;left:-19px;top:4px;width:8px;height:8px;border-radius:50%;background:var(--accent);border:2px solid #fff}
+.tl-date{font-size:11px;color:var(--ink-muted);font-family:'JetBrains Mono',monospace}
+.tl-txt{font-size:13px;color:var(--ink);margin-top:2px;font-weight:500}
+.rep-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 13px;margin-bottom:7px}
+.detail-photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.detail-photo{height:100px;border-radius:8px;border:1px solid var(--border);cursor:zoom-in;transition:transform .15s;object-fit:cover}
+.detail-photo:hover{transform:scale(1.04)}
+
+/* ══ LIGHTBOX ══ */
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;align-items:center;justify-content:center;cursor:zoom-out}
+.lightbox.open{display:flex}
+.lightbox img{max-width:92vw;max-height:90vh;border-radius:12px;box-shadow:0 8px 48px rgba(0,0,0,.5)}
+
+/* ══ FICHE ══ */
+.fiche-wrap{background:var(--surface);border:2px solid var(--border);border-radius:var(--r);padding:26px;font-size:13px;max-width:680px;margin:0 auto}
+.fiche-hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid var(--ink);padding-bottom:12px;margin-bottom:16px}
+.fiche-ttl{font-family:'Playfair Display',serif;font-size:19px;font-weight:700}
+.fiche-num{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-light);background:var(--surface2);padding:4px 9px;border-radius:6px;border:1px solid var(--border)}
+.fiche-sec{margin-bottom:13px}
+.fiche-sec-ttl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-muted);font-weight:700;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.fiche-row{display:grid;grid-template-columns:155px 1fr;gap:6px;margin-bottom:5px;align-items:baseline}
+.fiche-key{font-size:12px;color:var(--ink-light);font-weight:600}
+.fiche-val{font-size:13px;color:var(--ink);border-bottom:1px dotted var(--border);padding-bottom:2px;min-height:17px}
+.fiche-editable{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;min-height:60px;background:var(--surface);outline:none;transition:border-color .15s}
+.fiche-editable:focus{border-color:var(--accent)}
+.fiche-photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.fiche-photos img{width:130px;height:95px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:zoom-in}
+.fiche-signs{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px}
+.sign-box{border-top:1px solid var(--ink);padding-top:6px;font-size:11px;color:var(--ink-muted)}
+
+/* ══ CHARTE ══ */
+.charte-line{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.cnum{width:30px;height:30px;border-radius:50%;background:var(--accent-bg);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--accent);flex-shrink:0}
+.ctext strong{font-size:13px;font-weight:700;color:var(--ink);display:block;margin-bottom:2px}
+.ctext span{font-size:12px;color:var(--ink-light)}
+
+/* ══ ABOUT ══ */
+.about-hero{background:linear-gradient(135deg,var(--accent-bg) 0%,var(--lav-bg) 100%);border:1px solid var(--border);border-radius:var(--r);padding:24px 28px;margin-bottom:16px}
+.mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
+.mod{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px;box-shadow:var(--shadow);border-top:3px solid var(--accent)}
+.mod.m2{border-top-color:var(--green)}.mod.m3{border-top-color:var(--lav)}.mod.m4{border-top-color:var(--amber)}.mod.m5{border-top-color:var(--teal)}.mod.m6{border-top-color:var(--red)}
+.mod h3{font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:var(--ink);margin-bottom:6px}
+.mod ul{padding-left:14px}.mod li{font-size:12px;color:var(--ink-light);line-height:1.7}
+.rgpd{background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:10px;padding:13px 16px;margin-bottom:16px}
+.rgpd h4{font-weight:700;font-size:13px;color:var(--amber);margin-bottom:4px}
+.rgpd p{font-size:12px;color:var(--ink-light);line-height:1.7}
+.wf-steps{display:flex;gap:0;margin-top:14px;position:relative}
+.wf-steps::before{content:'';position:absolute;top:17px;left:0;right:0;height:2px;background:var(--border);z-index:0}
+.wstep{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;z-index:1}
+.wdot{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center;margin-bottom:7px;box-shadow:0 2px 8px rgba(108,142,191,.3)}
+.wdot.g{background:var(--green)}.wdot.a{background:var(--amber)}.wdot.l{background:var(--lav)}.wdot.t{background:var(--teal)}
+.wlbl{font-size:11px;font-weight:700;color:var(--ink)}.wsub{font-size:10px;color:var(--ink-muted);margin-top:2px}
+.empty{text-align:center;padding:40px 20px;color:var(--ink-muted)}
+.empty .ico{font-size:36px;margin-bottom:10px}
+
+/* ══ PRINT ══ */
+@media print{
+  .sidebar,.topbar,.topbar-actions,.btn,.mo,.lightbox,.filters,
+  .pagination,#setup-screen,#loading-overlay,.status-bar{display:none!important}
+  .content{padding:0}
+  .card{box-shadow:none;border:1px solid #ccc}
+}
+@media(max-width:900px){
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .chart-grid{grid-template-columns:1fr}
+  .sidebar{width:200px;min-width:200px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ SETUP SCREEN ══ -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <div class="setup-logo">Respect des Lieux v3</div>
+    <div class="setup-sub">Lycée Antoine Watteau — Configuration initiale</div>
+    <div class="setup-steps">
+      <div class="setup-step active" id="step-ind-0"></div>
+      <div class="setup-step" id="step-ind-1"></div>
+      <div class="setup-step" id="step-ind-2"></div>
+    </div>
+
+    <!-- Écran de chargement config -->
+    <div class="setup-section active" id="setup-step-0">
+      <div class="setup-title">Charger votre configuration</div>
+      <div class="setup-desc">
+        Sélectionnez votre fichier <strong>config.json</strong> depuis votre PC pour vous connecter à Supabase.
+      </div>
+
+      <div style="border:2px dashed var(--border);border-radius:12px;padding:22px;text-align:center;margin-bottom:16px">
+        <div style="font-size:32px;margin-bottom:8px">📂</div>
+        <div style="font-size:13px;color:var(--ink-light);margin-bottom:14px">
+          Sélectionnez votre <strong>config.json</strong>
+        </div>
+        <label class="btn btn-primary" style="cursor:pointer;display:inline-flex">
+          Choisir config.json
+          <input type="file" accept=".json,application/json" onchange="loadConfigFile(this)" style="display:none">
+        </label>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:13px 15px;font-size:12px;color:var(--ink-light);line-height:1.8">
+        <strong style="color:var(--ink)">Vous n'avez pas encore de config.json ?</strong><br>
+        Créez un fichier texte nommé <code style="background:var(--border);padding:1px 5px;border-radius:4px">config.json</code> avec ce contenu :
+        <pre style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:8px;font-size:11px;font-family:'JetBrains Mono',monospace;white-space:pre-wrap;color:var(--ink)">{
+  "supabaseUrl": "https://xxxx.supabase.co",
+  "supabaseKey": "sb_publishable_...",
+  "etablissement": "Lycée Antoine Watteau",
+  "cpe": "Nom du CPE"
+}</pre>
+        Conservez ce fichier sur votre PC — ne le mettez jamais sur GitHub.
+      </div>
+
+      <div style="margin-top:14px;text-align:center">
+        <button class="btn btn-ghost btn-sm" onclick="showSection('about')" style="font-size:11px;color:var(--ink-muted)">
+          Première utilisation ? Voir le guide SQL →
+        </button>
+      </div>
+    </div>
+
+    <!-- Étape 1 : Supabase 
+    <div class="setup-section" id="setup-step-1">
+      <div class="setup-title">Vos identifiants Supabase</div>
+      <div class="setup-desc">
+        Allez sur <strong>supabase.com</strong>, ouvrez votre projet, puis copiez ces deux informations depuis <em>Project Settings → API</em>.<br><br><strong style="color:var(--red)">Attention :</strong> L'URL se termine par <code style="background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px">.supabase.co</code> (sans "m") — pas .supabase.com.
+      </div>
+      <div class="setup-field">
+        <label for="s-url">URL du projet</label>
+        <input type="url" id="s-url" placeholder="https://xxxx.supabase.co" autocomplete="off" oninput="liveFixUrl(this)">
+        <span id="url-hint" style="font-size:11px;color:var(--ink-muted);margin-top:2px">Commence par https:// et finit par .supabase.co</span>
+      </div>
+      <div class="setup-field">
+        <label for="s-key">Clé anon publique</label>
+        <input type="text" id="s-key" placeholder="sb_publishable_... ou eyJhbGciOiJIUzI1NiI..." autocomplete="off">
+        <span style="font-size:11px;color:var(--ink-muted);margin-top:2px">Clé "anon public" — commence par sb_publishable_ ou eyJ selon la version Supabase</span>
+      </div>
+      <div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--ink-light);margin-top:4px;line-height:1.8">
+        <strong style="color:var(--amber)">⚠ Important — mode d'ouverture du fichier</strong><br>
+        La synchronisation Supabase ne fonctionne <strong>que si le fichier est servi via HTTP</strong>, pas en double-cliquant dessus.<br><br>
+        <strong>Option 1 (recommandée) :</strong> Installez <strong>VS Code + extension Live Server</strong> → clic droit sur le fichier → "Open with Live Server"<br>
+        <strong>Option 2 :</strong> Copiez le fichier dans un dossier servi par votre serveur web d'établissement (IIS, Apache…)<br>
+        <strong>Option 3 :</strong> Double-clic normal → fonctionne en mode hors-ligne local uniquement
+      </div>
+      <div class="setup-actions" style="margin-top:18px">
+        <button class="btn btn-ghost" onclick="setupPrev()">← Retour</button>
+        <button class="btn btn-primary" onclick="setupNext()">Suivant →</button>
+      </div>
+    </div>
+
+    <!-- Étape 2 : SQL     <!-- Étape 2 : SQL + établissement -->
+    <div class="setup-section" id="setup-step-2">
+      <div class="setup-title">Initialisation des tables</div>
+      <div class="setup-desc">
+        Dans votre projet Supabase, allez dans <strong>SQL Editor → New query</strong>, collez le script ci-dessous, puis cliquez sur <strong>RUN</strong>.<br><br>
+        Le script désactive RLS pour éviter les blocages 401 — approprié pour un réseau interne d'établissement.
+      </div>
+      <div class="sql-box" id="sql-setup-box"></div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="copySetupSQL()">📋 Copier le script SQL</button>
+        <a id="supa-sql-link" href="#" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration:none">↗ Ouvrir SQL Editor</a>
+      </div>
+      <div style="background:var(--amber-bg);border:1.5px solid var(--amber);border-radius:8px;padding:10px 13px;font-size:12px;color:var(--ink-light);margin-bottom:14px;line-height:1.6">
+        <strong style="color:var(--amber)">Déjà exécuté le script sur un autre poste ?</strong> Passez directement à Terminer — les tables sont déjà créées.
+      </div>
+      <div class="setup-field">
+        <label for="s-etab">Nom de l'établissement</label>
+        <input type="text" id="s-etab" value="Lycée Antoine Watteau">
+      </div>
+      <div class="setup-field">
+        <label for="s-cpe">CPE référent principal (optionnel)</label>
+        <input type="text" id="s-cpe" placeholder="Nom du CPE — pré-rempli dans les formulaires">
+      </div>
+      <div class="setup-actions">
+        <button class="btn btn-ghost" onclick="setupPrev()">← Retour</button>
+        <button class="btn btn-primary" onclick="finishSetup()">Terminer et ouvrir l'application →</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ LOADING ══ -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:var(--ink-muted)" id="loading-txt">Connexion à Supabase…</div>
+</div>
+
+<!-- ══ APP ══ -->
+<div class="app" id="main-app" style="display:none">
+
+<aside class="sidebar" role="navigation" aria-label="Menu principal">
+  <div class="sb-hero">
+    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='145'%3E%3Crect width='256' height='145' fill='%234a6fa5'/%3E%3Crect y='80' width='256' height='65' fill='%23385990'/%3E%3Ccircle cx='40' cy='60' r='30' fill='%23567db8' opacity='.6'/%3E%3Ccircle cx='200' cy='40' r='40' fill='%23567db8' opacity='.4'/%3E%3C/svg%3E" alt="">
+    <div class="sb-hero-ov">
+      <h2 id="sb-etab-name">Lycée A. Watteau</h2>
+      <small>Respect des Lieux v3</small>
+      <em id="sb-sync-label">Synchronisé</em>
+    </div>
+  </div>
+  <nav class="sb-nav">
+    <div class="nav-grp">Navigation</div>
+    <div class="nav-item active" onclick="showSection('tableau')" role="button" tabindex="0">📊 Tableau de bord</div>
+    <div class="nav-item" onclick="showSection('signalements')" role="button" tabindex="0">📋 Signalements</div>
+    <div class="nav-item" onclick="showSection('reparations')" role="button" tabindex="0">🔧 Réparations</div>
+    <div class="nav-grp">Documents</div>
+    <div class="nav-item" onclick="showSection('fiche')" role="button" tabindex="0">📄 Fiche éducative</div>
+    <div class="nav-item" onclick="showSection('charte')" role="button" tabindex="0">📜 Charte élève</div>
+    <div class="nav-grp">Admin</div>
+    <div class="nav-item" onclick="showSection('about')" role="button" tabindex="0">ℹ️ À propos</div>
+  </nav>
+  <div class="sb-stats" aria-label="Stats rapides">
+    <div class="stat-pill">
+      <div class="sp-val amb" id="sb-month">0</div>
+      <div class="sp-lbl">ce mois</div>
+    </div>
+    <div class="stat-pill">
+      <div class="sp-val red" id="sb-repair">0</div>
+      <div class="sp-lbl">en cours</div>
+    </div>
+    <div class="stat-pill">
+      <div class="sp-val gr" id="sb-clos">0</div>
+      <div class="sp-lbl">clos</div>
+    </div>
+  </div>
+</aside>
+
+<div class="main">
+  <header class="topbar">
+    <div class="topbar-title" id="section-title">Tableau de bord</div>
+    <div class="topbar-actions">
+      <div class="status-bar" onclick="showSection('about')" id="status-bar" aria-label="Statut connexion">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-txt">…</span>
+        <span class="queue-badge" id="queue-badge" style="display:none">0</span>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('signalement')" aria-label="Nouveau signalement">+ Signalement</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV()" aria-label="Export CSV">↓ CSV</button>
+    </div>
+  </header>
+
+  <main class="content">
+
+    <!-- ══ TABLEAU DE BORD ══ -->
+    <section class="section active" id="section-tableau">
+      <div class="kpi-grid">
+        <div class="kpi-card blue"><div class="kpi-lbl">Total signalements</div><div class="kpi-val blue" id="kpi-total">0</div><div class="kpi-sub">depuis le début</div></div>
+        <div class="kpi-card red"><div class="kpi-lbl">Cas graves</div><div class="kpi-val red" id="kpi-graves">0</div><div class="kpi-sub">à suivre en priorité</div></div>
+        <div class="kpi-card green"><div class="kpi-lbl">Dossiers clos</div><div class="kpi-val green" id="kpi-clos">0</div><div class="kpi-sub"><div class="pbar"><div class="pbar-fill" id="kpi-prog" style="width:0%"></div></div></div></div>
+        <div class="kpi-card amber"><div class="kpi-lbl">Taux résolution</div><div class="kpi-val amber" id="kpi-taux">0%</div><div class="kpi-sub">objectif : 80%</div></div>
+      </div>
+      <div class="chart-grid">
+        <div class="card"><div class="card-hd"><div class="card-title">Par lieu</div></div><div style="padding:13px 16px"><div class="bar-chart" id="chart-lieu"></div></div></div>
+        <div class="card"><div class="card-hd"><div class="card-title">Par type</div></div><div style="padding:13px 16px"><div class="bar-chart" id="chart-type"></div></div></div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Évolution mensuelle (8 mois)</div></div>
+        <div style="padding:13px 16px 8px">
+          <div class="month-chart" id="month-chart"></div>
+          <div class="mc-labels" id="month-labels"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Derniers signalements</div><button class="btn btn-ghost btn-sm" onclick="showSection('signalements')">Voir tout</button></div>
+        <div class="table-wrap">
+          <table aria-label="Derniers signalements">
+            <thead><tr><th class="no-sort">Date</th><th class="no-sort">N°</th><th class="no-sort">Lieu</th><th class="no-sort">Type</th><th class="no-sort">Gravité</th><th class="no-sort">Élève</th><th class="no-sort">Statut</th><th class="no-sort"></th></tr></thead>
+            <tbody id="tbody-recent"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ SIGNALEMENTS ══ -->
+    <section class="section" id="section-signalements">
+      <div class="filters" role="search">
+        <input type="search" id="f-txt" class="search-inp" placeholder="Rechercher…" oninput="applyFilters()" aria-label="Recherche">
+        <select id="f-grav" onchange="applyFilters()" aria-label="Gravité"><option value="">Toutes gravités</option><option>Mineure</option><option>Moyenne</option><option>Grave</option></select>
+        <select id="f-stat" onchange="applyFilters()" aria-label="Statut"><option value="">Tous statuts</option><option>Ouvert</option><option>En réparation</option><option>Clos</option></select>
+        <select id="f-lieu" onchange="applyFilters()" aria-label="Lieu"><option value="">Tous lieux</option></select>
+        <input type="date" id="f-d1" onchange="applyFilters()" aria-label="Date début">
+        <input type="date" id="f-d2" onchange="applyFilters()" aria-label="Date fin">
+        <button class="btn btn-ghost btn-sm" onclick="resetSigFilters()">✕ Reset</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span id="count-lbl" style="font-size:12px;color:var(--ink-muted)"></span>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table aria-label="Signalements">
+            <thead><tr>
+              <th onclick="sortBy('sig','num')">N°</th>
+              <th onclick="sortBy('sig','date')">Date</th>
+              <th onclick="sortBy('sig','lieu')">Lieu</th>
+              <th onclick="sortBy('sig','type')">Type</th>
+              <th onclick="sortBy('sig','gravite')">Gravité</th>
+              <th onclick="sortBy('sig','signale_par')">Signalé par</th>
+              <th onclick="sortBy('sig','eleve')">Élève</th>
+              <th onclick="sortBy('sig','statut')">Statut</th>
+              <th class="no-sort">📷</th>
+              <th class="no-sort">Actions</th>
+            </tr></thead>
+            <tbody id="tbody-all"></tbody>
+          </table>
+        </div>
+        <div id="pag-sig" class="pagination"></div>
+      </div>
+    </section>
+
+    <!-- ══ RÉPARATIONS ══ -->
+    <section class="section" id="section-reparations">
+      <div class="filters" role="search">
+        <input type="search" id="r-txt" class="search-inp" placeholder="Rechercher…" oninput="applyRepFilters()" aria-label="Recherche réparations">
+        <select id="r-stat" onchange="applyRepFilters()" aria-label="Statut"><option value="">Tous statuts</option><option>En cours</option><option>Terminée</option></select>
+        <select id="r-ref" onchange="applyRepFilters()" aria-label="Référent"><option value="">Tous référents</option></select>
+        <input type="date" id="r-d1" onchange="applyRepFilters()" aria-label="Date début">
+        <input type="date" id="r-d2" onchange="applyRepFilters()" aria-label="Date fin">
+        <button class="btn btn-ghost btn-sm" onclick="resetRepFilters()">✕ Reset</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table aria-label="Réparations">
+            <thead><tr>
+              <th onclick="sortBy('rep','id')">N°</th>
+              <th onclick="sortBy('rep','signa_num')">Dossier</th>
+              <th onclick="sortBy('rep','eleve')">Élève</th>
+              <th onclick="sortBy('rep','classe')">Classe</th>
+              <th onclick="sortBy('rep','lieu')">Lieu/Type</th>
+              <th onclick="sortBy('rep','mesure')">Mesure</th>
+              <th onclick="sortBy('rep','referent')">Référent</th>
+              <th onclick="sortBy('rep','debut')">Début</th>
+              <th onclick="sortBy('rep','statut')">Statut</th>
+              <th class="no-sort">Actions</th>
+            </tr></thead>
+            <tbody id="tbody-rep"></tbody>
+          </table>
+        </div>
+        <div id="pag-rep" class="pagination"></div>
+      </div>
+    </section>
+
+    <!-- ══ FICHE ══ -->
+    <section class="section" id="section-fiche">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-hd">
+          <div class="card-title">Générer une fiche de réparation éducative</div>
+          <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Imprimer</button>
+        </div>
+        <div style="padding:13px 16px;display:flex;gap:12px;align-items:center">
+          <label for="fiche-select" style="font-size:13px;font-weight:600;color:var(--ink-light);white-space:nowrap">Dossier :</label>
+          <select id="fiche-select" onchange="loadFiche(this.value)" style="flex:1;font-family:'Nunito';font-size:13px;padding:7px 11px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);outline:none" aria-label="Choisir un dossier">
+            <option value="">— Choisir —</option>
+          </select>
+        </div>
+      </div>
+      <div id="fiche-content"><div class="empty"><div class="ico">📄</div><p>Sélectionnez un dossier.</p></div></div>
+    </section>
+
+    <!-- ══ CHARTE ══ -->
+    <section class="section" id="section-charte">
+      <div class="card">
+        <div class="card-hd"><div class="card-title">Charte du Respect des Lieux</div><button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Imprimer</button></div>
+        <div style="padding:20px 24px">
+          <p style="font-size:13px;color:var(--ink-light);margin-bottom:18px;line-height:1.7">En tant qu'élève du <span id="charte-etab">Lycée Antoine Watteau</span>, je m'engage à respecter les engagements suivants :</p>
+          <div class="charte-line"><div class="cnum">1</div><div class="ctext"><strong>Je respecte les salles, couloirs, sanitaires et matériel numérique.</strong><span>Tout équipement est un bien commun que je m'engage à préserver.</span></div></div>
+          <div class="charte-line"><div class="cnum">2</div><div class="ctext"><strong>Je laisse chaque espace propre et en bon état après mon passage.</strong><span>Je range, je nettoie, je ne dégrade pas — même si personne ne me regarde.</span></div></div>
+          <div class="charte-line"><div class="cnum">3</div><div class="ctext"><strong>Je signale immédiatement toute dégradation dont je suis témoin.</strong><span>Signaler n'est pas dénoncer : c'est contribuer au bien commun.</span></div></div>
+          <div class="charte-line"><div class="cnum">4</div><div class="ctext"><strong>Je participe aux démarches d'amélioration de mon lycée.</strong><span>Le lycée m'appartient autant qu'à tous : je contribue à en faire un lieu dont je suis fier.</span></div></div>
+          <div style="background:var(--red-bg);border:1.5px solid var(--red);border-radius:8px;padding:11px 14px;margin:16px 0;font-size:12px;color:var(--ink-light)"><strong style="color:var(--red)">Conséquences :</strong> Tout manquement peut entraîner une mesure de réparation éducative, une sanction disciplinaire et/ou la facturation des réparations aux représentants légaux.</div>
+          <div class="fiche-signs"><div class="sign-box">Signature de l'élève<br><br><br><br></div><div class="sign-box">Signature du représentant légal<br><br><br><br></div></div>
+          <div style="margin-top:14px;font-size:11px;color:var(--ink-muted);text-align:center">Date : _____ / _____ / _________</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ ABOUT ══ -->
+    <section class="section" id="section-about">
+      <div class="about-hero">
+        <h2 style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;margin-bottom:8px">Outil de gestion des dégradations v3</h2>
+        <p style="font-size:13px;color:var(--ink-light);line-height:1.7">Données partagées en temps réel via Supabase. Accessible depuis tous les postes de l'équipe vie scolaire.</p>
+      </div>
+      <div class="mod-grid">
+        <div class="mod"><h3>Multi-postes</h3><ul><li>Supabase cloud (SQL)</li><li>Realtime entre postes</li><li>Photos sur Storage</li><li>Offline queue</li></ul></div>
+        <div class="mod m2"><h3>Signalements</h3><ul><li>Numéros AAAA-NNNN</li><li>Photos Supabase Storage</li><li>Filtres + tri + pagination</li><li>Champs "Autre" libres</li></ul></div>
+        <div class="mod m3"><h3>Réparations</h3><ul><li>Mesures multiples/dossier</li><li>Filtres référent + date</li><li>Clôture saisissable</li><li>Génération de fiche</li></ul></div>
+        <div class="mod m4"><h3>Fiche éducative</h3><ul><li>6 rubriques réglementaires</li><li>Photos intégrées</li><li>Entretiens éditables</li><li>Impression directe</li></ul></div>
+        <div class="mod m5"><h3>Dashboard</h3><ul><li>KPIs temps réel</li><li>Graphiques lieu/type</li><li>Évolution 8 mois</li><li>Export CSV</li></ul></div>
+        <div class="mod m6"><h3>RGPD</h3><ul><li>Données sur votre Supabase</li><li>Aucun tiers</li><li>Faits objectifs</li><li>Purge possible</li></ul></div>
+      </div>
+      <div class="rgpd">
+        <h4>Cadre réglementaire RGPD</h4>
+        <p>Cet outil traite des données personnelles de mineurs. Elles sont stockées dans votre projet Supabase (hébergé EU par défaut). Avant utilisation : déclarez le traitement au DPD académique, informez les familles. Ne mentionnez que des faits objectifs — aucune appréciation comportementale.</p>
+      </div>
+      <div style="text-align:center;padding:12px 0">
+        <button class="btn btn-ghost btn-sm" onclick="reconfig()" style="color:var(--red)">⚙️ Reconfigurer Supabase</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportCSV()" style="margin-left:8px">↓ Export CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportJSON()" style="margin-left:4px">↓ Export JSON</button>
+        <button class="btn btn-red btn-sm" onclick="purgeData()" style="margin-left:8px">🗑️ Purger les données</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+</div><!-- .app -->
+
+<!-- ══ MODALS ══ -->
+
+<!-- Signalement -->
+<div class="mo" id="mo-signalement" role="dialog" aria-modal="true" aria-labelledby="mo-sig-t">
+  <div class="modal">
+    <div class="mo-hd">
+      <div class="mo-title" id="mo-sig-t">Nouveau signalement</div>
+      <button class="xbtn" onclick="closeModal('signalement')" aria-label="Fermer">✕</button>
+    </div>
+    <div class="mo-body">
+      <div class="fgrid">
+        <div class="field"><label for="sig-date">Date <span style="color:var(--red)">*</span></label><input type="date" id="sig-date" required></div>
+        <div class="field"><label for="sig-heure">Heure</label><input type="time" id="sig-heure"></div>
+        <div class="field">
+          <label for="sig-lieu">Lieu <span style="color:var(--red)">*</span></label>
+          <select id="sig-lieu" onchange="toggleAutre('lieu',this.value)" required>
+            <option>Toilettes</option><option>Couloir</option><option>Salle de classe</option><option>CDI</option>
+            <option>Cantine / self</option><option>Gymnase</option><option>Extérieur / cour</option>
+            <option>Loge / accueil</option><option>Vestiaires</option><option>Autre</option>
+          </select>
+        </div>
+        <div class="field" id="lieu-autre-wrap" style="display:none"><label for="sig-lieu-autre">Préciser le lieu</label><input type="text" id="sig-lieu-autre" placeholder="Lieu exact…"></div>
+        <div class="field">
+          <label for="sig-type">Type <span style="color:var(--red)">*</span></label>
+          <select id="sig-type" onchange="toggleAutre('type',this.value)" required>
+            <option>Tags / graffiti</option><option>Casse de matériel</option><option>Salissures</option>
+            <option>Matériel informatique</option><option>Mobilier</option><option>Vitres / murs</option>
+            <option>Sanitaires</option><option>Autre</option>
+          </select>
+        </div>
+        <div class="field" id="type-autre-wrap" style="display:none"><label for="sig-type-autre">Préciser le type</label><input type="text" id="sig-type-autre" placeholder="Type exact…"></div>
+        <div class="field"><label for="sig-gravite">Gravité</label><select id="sig-gravite"><option>Mineure</option><option>Moyenne</option><option>Grave</option></select></div>
+        <div class="field"><label for="sig-par">Signalé par</label><select id="sig-par"><option>Agent</option><option>AED</option><option>CPE</option><option>Enseignant</option><option>Chef d'établissement</option><option>Élève</option></select></div>
+        <div class="field fc2">
+          <label for="sig-desc">Description des faits</label>
+          <textarea id="sig-desc" rows="3" placeholder="Décrire objectivement les faits constatés…"></textarea>
+          <div class="field-note">Faits objectifs uniquement — pas d'appréciation comportementale (RGPD)</div>
+        </div>
+        <div class="fsep">Élève identifié (si connu)</div>
+        <div class="field"><label for="sig-eleve">Nom, prénom</label><input type="text" id="sig-eleve" placeholder="Nom Prenom"></div>
+        <div class="field"><label for="sig-classe">Classe</label><input type="text" id="sig-classe" placeholder="Ex : 2nde 3"></div>
+        <div class="field fc2"><label for="sig-famille">Famille informée ?</label><select id="sig-famille"><option value="non">Non encore</option><option value="oui">Oui</option></select></div>
+        <div class="fsep">Photos (2 maximum — envoyées sur Supabase Storage)</div>
+        <div class="field fc2">
+          <div class="photo-zone" id="drop-zone"
+            ondragover="event.preventDefault();this.classList.add('drag')"
+            ondragleave="this.classList.remove('drag')"
+            ondrop="handleDrop(event)">
+            <input type="file" id="sig-photos" accept="image/*" multiple onchange="queuePhotos(this.files)" aria-label="Ajouter photos">
+            <div class="photo-zone-txt">📷 Cliquer ou glisser-déposer (JPG/PNG — max 3 Mo chacune)</div>
+          </div>
+          <div id="upload-status" class="photo-uploading" style="display:none"></div>
+          <div class="photo-preview" id="preview-photos"></div>
+        </div>
+      </div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-ghost" onclick="closeModal('signalement')">Annuler</button>
+      <button class="btn btn-primary" id="btn-save-sig" onclick="saveSig()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Réparation -->
+<div class="mo" id="mo-reparation" role="dialog" aria-modal="true" aria-labelledby="mo-rep-t">
+  <div class="modal">
+    <div class="mo-hd">
+      <div>
+        <div class="mo-title" id="mo-rep-t">Nouvelle mesure de réparation</div>
+        <div style="font-size:12px;color:var(--ink-muted);margin-top:3px" id="rep-ctx"></div>
+      </div>
+      <button class="xbtn" onclick="closeModal('reparation')" aria-label="Fermer">✕</button>
+    </div>
+    <div class="mo-body">
+      <div class="fgrid">
+        <div class="field fc2">
+          <label for="rep-mesure">Mesure décidée <span style="color:var(--red)">*</span></label>
+          <select id="rep-mesure" required>
+            <option>Participation au nettoyage des lieux</option>
+            <option>Remise en état / réparation matérielle</option>
+            <option>Affichage de sensibilisation</option>
+            <option>Aide aux agents sur plage horaire</option>
+            <option>Rédaction d'un engagement écrit</option>
+            <option>Entretien avec le chef d'établissement</option>
+            <option>Travail d'intérêt collectif</option>
+            <option>Autre mesure</option>
+          </select>
+        </div>
+        <div class="field"><label for="rep-ref">Adulte référent <span style="color:var(--red)">*</span></label><input type="text" id="rep-ref" placeholder="Nom du CPE ou responsable" required></div>
+        <div class="field"><label for="rep-debut">Date de début <span style="color:var(--red)">*</span></label><input type="date" id="rep-debut" required></div>
+        <div class="field fc2"><label for="rep-duree">Durée prévue</label><input type="text" id="rep-duree" placeholder="Ex : 2h, 3 séances…"></div>
+        <div class="field fc2"><label for="rep-notes">Notes — entretien de prise de conscience</label><textarea id="rep-notes" rows="3" placeholder="Ce que l'élève a exprimé lors de l'entretien initial…"></textarea></div>
+        <div class="field fc2"><label for="rep-cloture">Entretien de clôture (à compléter à l'issue)</label><textarea id="rep-cloture" rows="3" placeholder="Ce que l'élève a compris, engagement pour la suite…"></textarea></div>
+      </div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-ghost" onclick="closeModal('reparation')">Annuler</button>
+      <button class="btn btn-primary" onclick="saveRep()">Enregistrer la mesure</button>
+    </div>
+  </div>
+</div>
+
+<!-- Détail -->
+<div class="mo" id="mo-detail" role="dialog" aria-modal="true" aria-labelledby="det-t">
+  <div class="modal modal-lg">
+    <div class="mo-hd">
+      <div><div class="mo-title" id="det-t"></div><div id="det-badges" style="margin-top:6px"></div></div>
+      <button class="xbtn" onclick="closeModal('detail')" aria-label="Fermer">✕</button>
+    </div>
+    <div class="mo-body" id="det-body"></div>
+    <div class="mo-ft" id="det-ft"></div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('open')" role="dialog" aria-label="Photo plein écran">
+  <img id="lb-img" src="" alt="Photo plein écran">
+</div>
+
+<div id="toast" role="alert" aria-live="polite"></div>
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   SUPABASE CLIENT (vanilla fetch — pas de SDK)
+═══════════════════════════════════════════════════════════════ */
+var SUPA = {
+  url: '', key: '',
+  hdr: function() {
+    return {
+      'Content-Type': 'application/json',
+      'apikey': SUPA.key,
+      'Authorization': 'Bearer ' + SUPA.key,
+      'Prefer': 'return=representation'
+    };
+  },
+  get: function(table, params) {
+    var qs = params ? '?' + params : '';
+    return fetch(SUPA.url + '/rest/v1/' + table + qs, { headers: SUPA.hdr() })
+      .then(function(r) {
+        if (r.ok) return r.json();
+        return Promise.reject('GET ' + table + ' ' + r.status);
+      });
+  },
+  post: function(table, body) {
+    return fetch(SUPA.url + '/rest/v1/' + table, {
+      method: 'POST', headers: SUPA.hdr(), body: JSON.stringify(body)
+    }).then(function(r) { return r.ok ? r.json() : r.text().then(function(t){ return Promise.reject(t); }); });
+  },
+  patch: function(table, id, body) {
+    return fetch(SUPA.url + '/rest/v1/' + table + '?id=eq.' + id, {
+      method: 'PATCH', headers: SUPA.hdr(), body: JSON.stringify(body)
+    }).then(function(r) { return r.ok ? r.json() : Promise.reject('PATCH ' + r.status); });
+  },
+  del: function(table, id) {
+    return fetch(SUPA.url + '/rest/v1/' + table + '?id=eq.' + id, {
+      method: 'DELETE', headers: SUPA.hdr()
+    }).then(function(r) { return r.ok; });
+  },
+  upload: function(bucket, path, blob) {
+    return fetch(SUPA.url + '/storage/v1/object/' + bucket + '/' + path, {
+      method: 'POST',
+      headers: { 'apikey': SUPA.key, 'Authorization': 'Bearer ' + SUPA.key, 'Content-Type': blob.type }
+    }).then(function(r) {
+      if (!r.ok) return r.text().then(function(t){ return Promise.reject(t); });
+      return SUPA.url + '/storage/v1/object/public/' + bucket + '/' + path;
+    });
+  },
+  pubUrl: function(bucket, path) {
+    return SUPA.url + '/storage/v1/object/public/' + bucket + '/' + path;
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   ÉTAT GLOBAL
+═══════════════════════════════════════════════════════════════ */
+var STATE = {
+  signalements: [],
+  reparations: [],
+  config: { etab: 'Lycée Antoine Watteau', ville: 'Valenciennes', cpe: '' },
+  online: false,
+  queue: [],           // opérations en attente (offline)
+  nextNum: 1,
+  sigSort: { key: 'date', asc: false },
+  repSort: { key: 'debut', asc: false },
+  sigPage: 1, repPage: 1,
+  PAGE: 20,
+  pendingPhotos: [],   // [{blob, name}] avant upload
+  uploadedUrls: [],    // URLs après upload
+  currentRepSigId: null
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   SETUP WIZARD
+═══════════════════════════════════════════════════════════════ */
+var setupStep = 0;
+
+
+var SQL_SCRIPT = [
+  '-- ================================================',
+  '-- Lycée Watteau — Respect des Lieux v3',
+  '-- Collez ce script dans SQL Editor > New query',
+  '-- puis cliquez RUN',
+  '-- ================================================',
+  '',
+  '-- 1. Tables',
+  'create table if not exists signalements (',
+  '  id bigint primary key,',
+  '  num text,',
+  '  date text, heure text,',
+  '  lieu text, type text,',
+  '  gravite text, signale_par text,',
+  '  description text,',
+  '  eleve text, classe text, famille text,',
+  '  photos_urls text[],',
+  '  statut text default \'Ouvert\',',
+  '  created_at timestamptz default now()',
+  ');',
+  '',
+  'create table if not exists reparations (',
+  '  id bigint primary key,',
+  '  signa_id bigint,',
+  '  mesure text, referent text,',
+  '  debut text, duree text,',
+  '  notes text, cloture text,',
+  '  statut text default \'En cours\',',
+  '  created_at timestamptz default now()',
+  ');',
+  '',
+  '-- 2. Désactiver RLS (réseau interne établissement)',
+  'alter table signalements disable row level security;',
+  'alter table reparations  disable row level security;',
+  '',
+  '-- 3. Bucket Storage pour les photos',
+  'insert into storage.buckets (id, name, public)',
+  '  values (\'rl-photos\', \'rl-photos\', true)',
+  '  on conflict (id) do nothing;',
+  '',
+  '-- 4. Politiques Storage',
+  '-- (drop si elles existent déjà pour éviter les erreurs)',
+  'drop policy if exists \"rl_photos_insert\" on storage.objects;',
+  'drop policy if exists \"rl_photos_select\" on storage.objects;',
+  'drop policy if exists \"rl_photos_delete\" on storage.objects;',
+  'create policy \"rl_photos_insert\" on storage.objects',
+  '  for insert with check (bucket_id = \'rl-photos\');',
+  'create policy \"rl_photos_select\" on storage.objects',
+  '  for select using (bucket_id = \'rl-photos\');',
+  'create policy \"rl_photos_delete\" on storage.objects',
+  '  for delete using (bucket_id = \'rl-photos\');'
+].join('\n');
+
+function initSetup() {
+  document.getElementById('sql-setup-box').textContent = SQL_SCRIPT;
+  // Priorité 1 : localStorage (config déjà chargée)
+  var cfg = loadLocalConfig();
+  if (cfg && cfg.supaUrl && cfg.supaKey) {
+    SUPA.url = cfg.supaUrl;
+    SUPA.key = cfg.supaKey;
+    STATE.config = cfg.config || STATE.config;
+    document.getElementById('setup-screen').classList.add('hidden');
+    document.getElementById('loading-overlay').classList.remove('hidden');
+    startApp();
+    return;
+  }
+  // Sinon afficher l'écran de chargement config
+  document.getElementById('loading-overlay').classList.add('hidden');
+}
+
+function loadConfigFile(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var cfg = JSON.parse(e.target.result);
+      var url = (cfg.supabaseUrl || '').trim().replace(/\/$/, '');
+      var key = (cfg.supabaseKey || '').trim();
+      if (!url || !key) { toast('config.json invalide : supabaseUrl et supabaseKey requis.', true); return; }
+      if (!url.startsWith('https://')) { toast('supabaseUrl doit commencer par https://', true); return; }
+      url = url.replace(/\.supabase\.com$/, '.supabase.co');
+      SUPA.url = url;
+      SUPA.key = key;
+      if (cfg.etablissement) STATE.config.etab = cfg.etablissement;
+      if (cfg.cpe)           STATE.config.cpe  = cfg.cpe;
+      saveLocalConfig();
+      document.getElementById('setup-screen').classList.add('hidden');
+      document.getElementById('loading-overlay').classList.remove('hidden');
+      startApp();
+    } catch(err) {
+      toast('Erreur de lecture du config.json : ' + err.message, true);
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function clearSavedConfig() {
+  localStorage.removeItem('rl3-cfg');
+  toast('Configuration effacée. Rechargez la page.');
+}
+
+
+function liveFixUrl(input) {
+  var v = input.value;
+  var hint = document.getElementById('url-hint');
+  if (v.includes('.supabase.com')) {
+    var fixed = v.replace(/\.supabase\.com/g, '.supabase.co');
+    if (hint) { hint.textContent = '→ Sera corrigé en : ' + fixed; hint.style.color = 'var(--amber)'; }
+  } else if (v.includes('.supabase.co')) {
+    if (hint) { hint.textContent = '✓ Format correct'; hint.style.color = 'var(--green)'; }
+  } else {
+    if (hint) { hint.textContent = 'Commence par https:// et finit par .supabase.co'; hint.style.color = 'var(--ink-muted)'; }
+  }
+}
+
+function normalizeSupaUrl(raw) {
+  var url = (raw || '').trim().replace(/\/$/, '');
+  if (!url) return '';
+  // Correction automatique de la faute fréquente .supabase.com → .supabase.co
+  url = url.replace(/\.supabase\.com(\/|$)/, '.supabase.co$1');
+  url = url.replace(/\.supabase\.com$/, '.supabase.co');
+  if (!url.startsWith('https://')) {
+    toast('L\'URL doit commencer par https://', true);
+    return '';
+  }
+  if (!url.includes('.supabase.co')) {
+    toast('L\'URL doit contenir .supabase.co (pas .com)', true);
+    return '';
+  }
+  return url;
+}
+
+function setupNext() {
+  if (setupStep === 1) {
+    var url = normalizeSupaUrl(document.getElementById('s-url').value);
+    var key = document.getElementById('s-key').value.trim();
+    if (!url || !key) { toast('Renseignez l\'URL et la clé avant de continuer.', true); return; }
+    document.getElementById('s-url').value = url; // affiche l'URL corrigée
+  }
+  setupStep++;
+  renderSetupStep();
+  if (setupStep === 2) {
+    var url = document.getElementById('s-url').value;
+    document.getElementById('supa-sql-link').href = 'https://supabase.com/dashboard/project/_/sql/new';
+  }
+}
+function setupPrev() { setupStep = Math.max(0, setupStep - 1); renderSetupStep(); }
+function renderSetupStep() {
+  document.querySelectorAll('.setup-section').forEach(function(s, i){ s.classList.toggle('active', i === setupStep); });
+  document.querySelectorAll('.setup-step').forEach(function(s, i){
+    s.classList.toggle('done', i < setupStep);
+    s.classList.toggle('active', i === setupStep);
+  });
+}
+
+
+
+
+
+
+
+function copySetupSQL() {
+  navigator.clipboard.writeText(SQL_SCRIPT)
+    .then(function(){ toast('Script copié !'); })
+    .catch(function(){ toast('Sélectionnez et copiez manuellement.', true); });
+}
+
+function finishSetup() {
+  var url = normalizeSupaUrl(document.getElementById('s-url').value);
+  var key = document.getElementById('s-key').value.trim();
+  var etab = document.getElementById('s-etab').value.trim() || 'Lycée Antoine Watteau';
+  var cpe  = document.getElementById('s-cpe').value.trim();
+  if (!url) { toast('URL Supabase invalide ou manquante.', true); return; }
+  if (!key) { toast('La clé anon est obligatoire.', true); return; }
+  SUPA.url = url; SUPA.key = key;
+  STATE.config.etab = etab;
+  STATE.config.cpe  = cpe;
+  saveLocalConfig();
+  document.getElementById('setup-screen').classList.add('hidden');
+  document.getElementById('loading-overlay').classList.remove('hidden');
+  startApp();
+}
+
+function reconfig() {
+
+  setupStep = 0;
+  renderSetupStep();
+  document.getElementById('setup-screen').classList.remove('hidden');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LOCAL CONFIG
+═══════════════════════════════════════════════════════════════ */
+function saveLocalConfig() {
+  localStorage.setItem('rl3-cfg', JSON.stringify({ supaUrl: SUPA.url, supaKey: SUPA.key, config: STATE.config }));
+}
+function loadLocalConfig() {
+  try { return JSON.parse(localStorage.getItem('rl3-cfg')); } catch(e){ return null; }
+}
+function loadLocalCache() {
+  try { STATE.signalements = JSON.parse(localStorage.getItem('rl3-sig') || '[]'); } catch(e){}
+  try { STATE.reparations  = JSON.parse(localStorage.getItem('rl3-rep') || '[]'); } catch(e){}
+  try { STATE.queue        = JSON.parse(localStorage.getItem('rl3-queue') || '[]'); } catch(e){}
+  computeNextNum();
+}
+function saveLocalCache() {
+  localStorage.setItem('rl3-sig', JSON.stringify(STATE.signalements));
+  localStorage.setItem('rl3-rep', JSON.stringify(STATE.reparations));
+  localStorage.setItem('rl3-queue', JSON.stringify(STATE.queue));
+}
+function computeNextNum() {
+  var yr = new Date().getFullYear(), max = 0;
+  STATE.signalements.forEach(function(s){
+    if (s.num && s.num.startsWith(yr+'-')) {
+      var n = parseInt(s.num.split('-')[1])||0;
+      if (n > max) max = n;
+    }
+  });
+  STATE.nextNum = max + 1;
+}
+function genNum() {
+  return new Date().getFullYear() + '-' + String(STATE.nextNum++).padStart(4,'0');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   START APP
+═══════════════════════════════════════════════════════════════ */
+function startApp() {
+  setLoading('Connexion à Supabase…');
+  loadLocalCache();
+  updateAppConfig();
+  document.getElementById('main-app').style.display = 'flex';
+  refreshAll();
+  probeSupa()
+    .then(function(status) {
+      setLoading(false);
+      if (status === 'ok') {
+        setOnline(true);
+        flushQueue();
+        subscribeRealtime();
+        toast('✓ Connecté — données synchronisées.');
+      } else if (status === 'file-local') {
+        setOnline(false);
+        showFileLocalBanner();
+      } else if (status === 'rls-blocked') {
+        setOnline(false);
+        showSupaError('Accès bloqué (RLS). Dans Supabase SQL Editor, exécutez : ALTER TABLE signalements DISABLE ROW LEVEL SECURITY; ALTER TABLE reparations DISABLE ROW LEVEL SECURITY;');
+      } else if (status === 'no-tables') {
+        setOnline(false);
+        showSupaError('Tables introuvables. Copiez et exécutez le script SQL dans Supabase SQL Editor, puis rechargez la page.');
+      } else if (status === 'bad-key') {
+        setOnline(false);
+        showSupaError('URL ou clé invalide. Vérifiez Project Settings → API dans votre projet Supabase.');
+      } else {
+        setOnline(false);
+        toast('Hors-ligne — données locales utilisées.', true);
+      }
+    });
+}
+
+/* Distingue : ok / bad-key / no-tables / offline
+   IMPORTANT : depuis file://, fetch vers domaine externe est bloqué CORS.
+   On détecte ce cas et on dégrade proprement en mode offline. */
+function probeSupa() {
+  // Si le fichier est ouvert en file://, fetch externe est impossible
+  if (window.location.protocol === 'file:') {
+    console.info('Mode file:// — fetch Supabase impossible, démarrage offline.');
+    return Promise.resolve('file-local');
+  }
+  var controller = new AbortController();
+  var timeout = setTimeout(function(){ controller.abort(); }, 8000);
+  return fetch(SUPA.url + '/rest/v1/signalements?limit=1', {
+    signal: controller.signal,
+    headers: { 'apikey': SUPA.key, 'Authorization': 'Bearer ' + SUPA.key }
+  })
+  .then(function(r) {
+    clearTimeout(timeout);
+    if (r.ok) return fetchFromSupabase().then(function(){ return 'ok'; });
+    return r.text().then(function(body) {
+      console.warn('Supabase HTTP', r.status, body.slice(0, 300));
+      if (r.status === 401 || r.status === 403) {
+        if (body.indexOf('JWT') !== -1 || body.indexOf('invalid') !== -1 || body.indexOf('token') !== -1)
+          return 'bad-key';
+        // 401 sans JWT = probablement RLS — traiter comme no-tables
+        return 'rls-blocked';
+      }
+      if (r.status === 404 || body.indexOf('42P01') !== -1 || body.indexOf('does not exist') !== -1)
+        return 'no-tables';
+      return 'offline';
+    });
+  })
+  .catch(function(e) {
+    clearTimeout(timeout);
+    console.warn('Supabase fetch error:', e);
+    return 'offline';
+  });
+}
+
+
+function showFileLocalBanner() {
+  var old = document.getElementById('supa-error-banner');
+  if (old) old.remove();
+  var banner = document.createElement('div');
+  banner.id = 'supa-error-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#d4956a;color:#fff;'
+    +'padding:14px 20px;font-family:Nunito,sans-serif;font-size:13px;font-weight:600;'
+    +'z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;line-height:1.5;';
+  banner.innerHTML = '<div>'
+    + '<strong>⚠ Fichier ouvert en local (file://)</strong> — La synchronisation Supabase est impossible depuis ce mode.<br>'
+    + '<span style="font-weight:400;font-size:12px">Pour activer la sync multi-postes, déposez ce fichier sur un serveur web ou utilisez l\'extension <strong>Live Server</strong> de VS Code.</span>'
+    + '</div>'
+    + '<button onclick="this.parentElement.remove()" style="background:#fff;color:#d4956a;border:none;border-radius:6px;'
+    + 'padding:5px 12px;font-family:Nunito,sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">OK, continuer en local</button>';
+  document.body.appendChild(banner);
+}
+
+function showSupaError(msg) {
+  var old = document.getElementById('supa-error-banner');
+  if (old) old.remove();
+  var banner = document.createElement('div');
+  banner.id = 'supa-error-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#e07070;color:#fff;'
+    +'padding:12px 20px;font-family:Nunito,sans-serif;font-size:13px;font-weight:700;'
+    +'z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;';
+  banner.innerHTML = '<span>⚠ ' + msg + '</span>'
+    + '<button onclick="reconfig()" style="background:#fff;color:#e07070;border:none;border-radius:6px;'
+    + 'padding:5px 12px;font-family:Nunito,sans-serif;font-size:12px;font-weight:700;cursor:pointer">Reconfigurer</button>';
+  document.body.appendChild(banner);
+}
+
+function updateAppConfig() {
+  var cfg = STATE.config;
+  document.getElementById('sb-etab-name').textContent = (cfg.etab||'Lycée Watteau').substring(0,22);
+  document.querySelectorAll('.charte-etab, #charte-etab').forEach(function(el){ el.textContent = cfg.etab||'Lycée Antoine Watteau'; });
+}
+
+function fetchFromSupabase() {
+  return Promise.all([
+    SUPA.get('signalements', 'order=date.desc&limit=500'),
+    SUPA.get('reparations',  'order=created_at.desc&limit=1000')
+  ]).then(function(results) {
+    STATE.signalements = results[0] || [];
+    STATE.reparations  = results[1] || [];
+    computeNextNum();
+    saveLocalCache();
+    refreshAll();
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   REALTIME (Supabase Broadcast via fetch polling fallback)
+═══════════════════════════════════════════════════════════════ */
+var realtimeInterval = null;
+var lastPollTime = new Date().toISOString();
+
+function subscribeRealtime() {
+  // Polling toutes les 30s (pas de WebSocket pour rester monofichier)
+  realtimeInterval = setInterval(function(){
+    if (!STATE.online) return;
+    var since = lastPollTime;
+    lastPollTime = new Date().toISOString();
+    Promise.all([
+      SUPA.get('signalements', 'created_at=gt.' + since + '&order=date.desc'),
+      SUPA.get('reparations',  'created_at=gt.' + since + '&order=created_at.desc')
+    ]).then(function(results){
+      var newSig = results[0]||[], newRep = results[1]||[];
+      var changed = false;
+      newSig.forEach(function(s){
+        var idx = STATE.signalements.findIndex(function(x){ return Number(x.id)===Number(s.id); });
+        if (idx === -1) { STATE.signalements.unshift(s); changed = true; }
+        else { STATE.signalements[idx] = s; }
+      });
+      newRep.forEach(function(r){
+        var idx = STATE.reparations.findIndex(function(x){ return Number(x.id)===Number(r.id); });
+        if (idx === -1) { STATE.reparations.push(r); changed = true; }
+        else { STATE.reparations[idx] = r; }
+      });
+      if (changed) {
+        computeNextNum();
+        saveLocalCache();
+        refreshAll();
+        toast('Données mises à jour depuis un autre poste.');
+      }
+    }).catch(function(){});
+  }, 30000);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   OFFLINE QUEUE
+═══════════════════════════════════════════════════════════════ */
+function enqueue(op) {
+  STATE.queue.push(op);
+  saveLocalCache();
+  updateQueueBadge();
+}
+function flushQueue() {
+  if (!STATE.queue.length) return;
+  var ops = STATE.queue.slice();
+  STATE.queue = [];
+  saveLocalCache();
+  updateQueueBadge();
+  var chain = Promise.resolve();
+  ops.forEach(function(op){
+    chain = chain.then(function(){
+      if (op.type === 'sig')  return SUPA.post('signalements', op.data).catch(function(){enqueue(op);});
+      if (op.type === 'rep')  return SUPA.post('reparations', op.data).catch(function(){enqueue(op);});
+      if (op.type === 'patch-sig') return SUPA.patch('signalements', op.id, op.data).catch(function(){enqueue(op);});
+      if (op.type === 'patch-rep') return SUPA.patch('reparations', op.id, op.data).catch(function(){enqueue(op);});
+    });
+  });
+  chain.then(function(){
+    if (ops.length) toast(ops.length + ' opération(s) synchronisée(s).');
+  });
+}
+function updateQueueBadge() {
+  var b = document.getElementById('queue-badge');
+  if (STATE.queue.length) { b.textContent = STATE.queue.length; b.style.display='inline'; }
+  else b.style.display = 'none';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STATUS
+═══════════════════════════════════════════════════════════════ */
+function setOnline(v) {
+  STATE.online = v;
+  var dot = document.getElementById('status-dot');
+  var txt = document.getElementById('status-txt');
+  if (!dot || !txt) return;
+  if (v) { dot.className='status-dot online'; txt.textContent='Synchronisé'; document.getElementById('sb-sync-label').textContent='Synchronisé'; }
+  else   { dot.className='status-dot offline'; txt.textContent='Hors-ligne'; document.getElementById('sb-sync-label').textContent='Hors-ligne'; }
+}
+function setSyncing(v) {
+  var dot = document.getElementById('status-dot');
+  var txt = document.getElementById('status-txt');
+  if (!dot || !txt) return;
+  if (v) { dot.className='status-dot syncing'; txt.textContent='Synchronisation…'; }
+  else setOnline(STATE.online);
+}
+function setLoading(msg) {
+  var ov = document.getElementById('loading-overlay');
+  var lt = document.getElementById('loading-txt');
+  if (msg) { ov.classList.remove('hidden'); lt.textContent = msg; }
+  else     ov.classList.add('hidden');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PHOTOS — COMPRESSION + UPLOAD SUPABASE STORAGE
+═══════════════════════════════════════════════════════════════ */
+function queuePhotos(files) {
+  Array.from(files).forEach(function(f){ addPhotoToQueue(f); });
+  document.getElementById('sig-photos').value='';
+}
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag');
+  Array.from(e.dataTransfer.files).filter(function(f){ return f.type.startsWith('image/'); })
+    .forEach(function(f){ addPhotoToQueue(f); });
+}
+function addPhotoToQueue(file) {
+  if (STATE.pendingPhotos.length >= 2) { toast('Maximum 2 photos.', true); return; }
+  if (!file.type.startsWith('image/')) { toast('Fichier non supporté.', true); return; }
+  if (file.size > 3.5*1024*1024) { toast('Photo trop lourde (max 3,5 Mo).', true); return; }
+  compressImage(file, 900, 700, 0.78, function(blob, previewUrl) {
+    var name = Date.now() + '-' + Math.random().toString(36).slice(2,8) + '.jpg';
+    STATE.pendingPhotos.push({ blob: blob, name: name, preview: previewUrl });
+    renderPhotoPreview();
+  });
+}
+function compressImage(file, maxW, maxH, quality, cb) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var w = img.width, h = img.height;
+      if (w > maxW) { h = Math.round(h*maxW/w); w = maxW; }
+      if (h > maxH) { w = Math.round(w*maxH/h); h = maxH; }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(function(blob){ cb(blob, canvas.toDataURL('image/jpeg', quality)); }, 'image/jpeg', quality);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function renderPhotoPreview() {
+  var wrap = document.getElementById('preview-photos');
+  if (!wrap) return;
+  wrap.innerHTML = STATE.pendingPhotos.map(function(p, i){
+    return '<div class="photo-thumb">'
+      + '<img src="'+p.preview+'" alt="Photo '+(i+1)+'">'
+      + '<button class="del-btn" onclick="removePhoto('+i+')" aria-label="Supprimer">✕</button>'
+      + '</div>';
+  }).join('');
+}
+function removePhoto(i) { STATE.pendingPhotos.splice(i,1); renderPhotoPreview(); }
+function resetPhotoState() { STATE.pendingPhotos = []; STATE.uploadedUrls = []; renderPhotoPreview(); }
+
+async function uploadPendingPhotos(sigId) {
+  var urls = [];
+  if (!STATE.pendingPhotos.length) return urls;
+  var status = document.getElementById('upload-status');
+  if (status) { status.style.display='block'; status.textContent='Envoi des photos…'; }
+  for (var i = 0; i < STATE.pendingPhotos.length; i++) {
+    var p = STATE.pendingPhotos[i];
+    var path = 'sig-' + sigId + '/' + p.name;
+    try {
+      status.textContent = 'Photo ' + (i+1) + '/' + STATE.pendingPhotos.length + '…';
+      var url = await SUPA.upload('rl-photos', path, p.blob);
+      urls.push(url);
+    } catch(e) {
+      console.warn('Upload photo échoué:', e);
+      toast('Photo ' + (i+1) + ' non uploadée (stockage local utilisé).', true);
+      urls.push(p.preview); // fallback base64
+    }
+  }
+  if (status) status.style.display = 'none';
+  return urls;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MODALS
+═══════════════════════════════════════════════════════════════ */
+function openModal(id, data) {
+  if (id === 'signalement') {
+    document.getElementById('sig-date').value = new Date().toISOString().split('T')[0];
+    ['sig-heure','sig-desc','sig-eleve','sig-classe'].forEach(function(i){ document.getElementById(i).value=''; });
+    document.getElementById('sig-lieu').value = 'Toilettes';
+    document.getElementById('sig-type').value = 'Tags / graffiti';
+    document.getElementById('sig-gravite').value = 'Mineure';
+    document.getElementById('sig-par').value = 'Agent';
+    document.getElementById('sig-famille').value = 'non';
+    document.getElementById('lieu-autre-wrap').style.display = 'none';
+    document.getElementById('type-autre-wrap').style.display = 'none';
+    resetPhotoState();
+  }
+  if (id === 'reparation' && data) {
+    STATE.currentRepSigId = data.id;
+    var s = STATE.signalements.find(function(x){ return Number(x.id)===Number(data.id); });
+    document.getElementById('rep-ctx').textContent = s ? ('Dossier '+(s.num||'')+ ' — '+s.lieu+' — '+(s.eleve||'Élève non identifié')) : '';
+    document.getElementById('rep-debut').value = new Date().toISOString().split('T')[0];
+    document.getElementById('rep-ref').value = STATE.config.cpe || '';
+    ['rep-duree','rep-notes','rep-cloture'].forEach(function(i){ document.getElementById(i).value=''; });
+    document.getElementById('rep-mesure').value = 'Participation au nettoyage des lieux';
+  }
+  document.getElementById('mo-' + id).classList.add('open');
+  setTimeout(function(){
+    var el = document.querySelector('#mo-' + id + ' input:not([type=file]), #mo-' + id + ' select');
+    if (el) el.focus();
+  }, 120);
+}
+function closeModal(id) { document.getElementById('mo-' + id).classList.remove('open'); }
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.mo.open').forEach(function(m){ m.classList.remove('open'); });
+    document.getElementById('lightbox').classList.remove('open');
+  }
+});
+document.querySelectorAll('.mo').forEach(function(o){
+  o.addEventListener('click', function(e){ if (e.target===o) o.classList.remove('open'); });
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   CHAMPS LIBRE "AUTRE"
+═══════════════════════════════════════════════════════════════ */
+function toggleAutre(type, val) {
+  document.getElementById(type+'-autre-wrap').style.display = val==='Autre' ? 'flex':'none';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SAUVEGARDE
+═══════════════════════════════════════════════════════════════ */
+async function saveSig() {
+  var date  = document.getElementById('sig-date').value;
+  var lieuSel = document.getElementById('sig-lieu').value;
+  if (!date)    { toast('La date est obligatoire.', true); return; }
+  if (!lieuSel) { toast('Le lieu est obligatoire.', true); return; }
+  var lieu = lieuSel==='Autre' ? (document.getElementById('sig-lieu-autre').value.trim()||'Autre') : lieuSel;
+  var typeSel = document.getElementById('sig-type').value;
+  var type = typeSel==='Autre' ? (document.getElementById('sig-type-autre').value.trim()||'Autre') : typeSel;
+  var btn = document.getElementById('btn-save-sig');
+  btn.disabled = true; btn.textContent = 'Enregistrement…';
+  var id = Date.now();
+  var num = genNum();
+  var photosUrls = [];
+  if (STATE.pendingPhotos.length) {
+    setSyncing(true);
+    photosUrls = await uploadPendingPhotos(id);
+    setSyncing(false);
+  }
+  var sig = {
+    id: id, num: num, date: date,
+    heure: document.getElementById('sig-heure').value,
+    lieu: lieu, type: type,
+    gravite: document.getElementById('sig-gravite').value,
+    signale_par: document.getElementById('sig-par').value,
+    description: document.getElementById('sig-desc').value,
+    eleve: document.getElementById('sig-eleve').value,
+    classe: document.getElementById('sig-classe').value,
+    famille: document.getElementById('sig-famille').value,
+    photos_urls: photosUrls,
+    statut: 'Ouvert',
+    created_at: new Date().toISOString()
+  };
+  STATE.signalements.unshift(sig);
+  saveLocalCache();
+  closeModal('signalement');
+  refreshAll();
+  toast('Signalement ' + num + ' enregistré.');
+  btn.disabled = false; btn.textContent = 'Enregistrer';
+  resetPhotoState();
+  if (STATE.online) {
+    SUPA.post('signalements', sig).catch(function(){ enqueue({type:'sig', data:sig}); });
+  } else {
+    enqueue({type:'sig', data:sig});
+  }
+}
+
+function saveRep() {
+  var mesure = document.getElementById('rep-mesure').value;
+  var ref    = document.getElementById('rep-ref').value.trim();
+  var debut  = document.getElementById('rep-debut').value;
+  if (!mesure) { toast('La mesure est obligatoire.', true); return; }
+  if (!ref)    { toast('L\'adulte référent est obligatoire.', true); return; }
+  if (!debut)  { toast('La date de début est obligatoire.', true); return; }
+  var r = {
+    id: Date.now(), signa_id: Number(STATE.currentRepSigId),
+    mesure: mesure, referent: ref, debut: debut,
+    duree: document.getElementById('rep-duree').value,
+    notes: document.getElementById('rep-notes').value,
+    cloture: document.getElementById('rep-cloture').value,
+    statut: 'En cours', created_at: new Date().toISOString()
+  };
+  STATE.reparations.push(r);
+  var s = STATE.signalements.find(function(x){ return Number(x.id)===Number(STATE.currentRepSigId); });
+  if (s && s.statut==='Ouvert') {
+    s.statut = 'En réparation';
+    if (STATE.online) SUPA.patch('signalements', s.id, {statut:'En réparation'}).catch(function(){ enqueue({type:'patch-sig',id:s.id,data:{statut:'En réparation'}}); });
+    else enqueue({type:'patch-sig',id:s.id,data:{statut:'En réparation'}});
+  }
+  saveLocalCache();
+  closeModal('reparation'); refreshAll();
+  toast('Mesure de réparation enregistrée.');
+  if (STATE.online) SUPA.post('reparations', r).catch(function(){ enqueue({type:'rep',data:r}); });
+  else enqueue({type:'rep',data:r});
+}
+
+function clore(id) {
+  var s = STATE.signalements.find(function(x){ return Number(x.id)===Number(id); });
+  if (!s) return;
+  s.statut = 'Clos'; saveLocalCache(); refreshAll();
+  toast('Dossier '+(s.num||'')+' clos.');
+  if (STATE.online) SUPA.patch('signalements', id, {statut:'Clos'}).catch(function(){ enqueue({type:'patch-sig',id:id,data:{statut:'Clos'}}); });
+  else enqueue({type:'patch-sig',id:id,data:{statut:'Clos'}});
+}
+function cloreRep(id) {
+  var r = STATE.reparations.find(function(x){ return Number(x.id)===Number(id); });
+  if (!r) return;
+  r.statut = 'Terminée'; saveLocalCache(); renderReps(); renderDashboard();
+  toast('Mesure terminée.');
+  if (STATE.online) SUPA.patch('reparations', id, {statut:'Terminée'}).catch(function(){ enqueue({type:'patch-rep',id:id,data:{statut:'Terminée'}}); });
+  else enqueue({type:'patch-rep',id:id,data:{statut:'Terminée'}});
+}
+function saveCloture(repId) {
+  var r = STATE.reparations.find(function(x){ return Number(x.id)===Number(repId); });
+  if (!r) return;
+  var fields = document.querySelectorAll('.fiche-editable');
+  var notes='', cloture='';
+  fields.forEach(function(f){
+    if (f.dataset.field==='notes')   notes   = f.innerText.trim();
+    if (f.dataset.field==='cloture') cloture = f.innerText.trim();
+  });
+  r.notes=notes; r.cloture=cloture;
+  saveLocalCache(); toast('Entretien de clôture enregistré.');
+  var patch = {notes:notes, cloture:cloture};
+  if (STATE.online) SUPA.patch('reparations', repId, patch).catch(function(){ enqueue({type:'patch-rep',id:repId,data:patch}); });
+  else enqueue({type:'patch-rep',id:repId,data:patch});
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════════════════ */
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(function(s){ s.classList.remove('active'); });
+  document.querySelectorAll('.nav-item').forEach(function(n){ n.classList.remove('active'); });
+  document.getElementById('section-'+id).classList.add('active');
+  var titles={tableau:'Tableau de bord',signalements:'Signalements',reparations:'Réparations',fiche:'Fiche éducative',charte:'Charte élève',about:'À propos'};
+  document.getElementById('section-title').textContent = titles[id]||'';
+  document.querySelectorAll('.nav-item').forEach(function(n){
+    var oc=n.getAttribute('onclick');
+    if (oc&&oc.indexOf("'"+id+"'")!==-1) n.classList.add('active');
+  });
+  if (id==='tableau')      renderDashboard();
+  if (id==='signalements') { buildLieuFilter(); renderAll(); }
+  if (id==='reparations')  { buildRefFilter(); renderReps(); }
+  if (id==='fiche')        buildFicheSelect();
+}
+function refreshAll() { renderDashboard(); renderAll(); renderReps(); updateSB(); }
+
+/* ═══════════════════════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════════════════════ */
+function renderDashboard() {
+  var sigs=STATE.signalements, total=sigs.length;
+  var graves=sigs.filter(function(s){return s.gravite==='Grave';}).length;
+  var clos=sigs.filter(function(s){return s.statut==='Clos';}).length;
+  var taux=total>0?Math.round(clos/total*100):0;
+  document.getElementById('kpi-total').textContent=total;
+  document.getElementById('kpi-graves').textContent=graves;
+  document.getElementById('kpi-clos').textContent=clos;
+  document.getElementById('kpi-taux').textContent=taux+'%';
+  document.getElementById('kpi-prog').style.width=taux+'%';
+  renderBar('chart-lieu',countBy(sigs,'lieu'));
+  renderBar('chart-type',countBy(sigs,'type'));
+  renderMonthChart();
+  var rec=sigs.slice(0,5);
+  document.getElementById('tbody-recent').innerHTML=rec.length
+    ?rec.map(function(s){
+      return '<tr>'
+        +'<td style="font-size:12px;color:var(--ink-muted)">'+fd(s.date)+'</td>'
+        +'<td style="font-family:monospace;font-size:11px;color:var(--ink-muted)">'+(s.num||'—')+'</td>'
+        +'<td><strong>'+esc(s.lieu)+'</strong></td>'
+        +'<td style="color:var(--ink-light)">'+esc(s.type)+'</td>'
+        +'<td>'+gbadge(s.gravite)+'</td>'
+        +'<td>'+(s.eleve?esc(s.eleve):'<em style="color:var(--ink-muted)">N/A</em>')+'</td>'
+        +'<td>'+sbadge(s.statut)+'</td>'
+        +"<td><button class='btn btn-ghost btn-sm' onclick='openDetail("+s.id+")'>Voir</button></td>"
+        +'</tr>';
+    }).join('')
+    :'<tr><td colspan="8"><div class="empty"><div class="ico">📋</div><p>Aucun signalement.</p></div></td></tr>';
+  updateSB();
+}
+
+function renderBar(id,data) {
+  var el=document.getElementById(id); if(!el) return;
+  var colors=['','g','a','l','t'];
+  var sorted=Object.entries(data).sort(function(a,b){return b[1]-a[1];}).slice(0,8);
+  var max=sorted.length?sorted[0][1]:1;
+  el.innerHTML=sorted.length?sorted.map(function(e,i){
+    var lbl=e[0].length>14?e[0].slice(0,14)+'…':e[0];
+    return '<div class="bar-row">'
+      +'<div class="bar-label" title="'+esc(e[0])+'">'+esc(lbl)+'</div>'
+      +'<div class="bar-track"><div class="bar-fill '+colors[i%colors.length]+'" style="width:'+(e[1]/max*100)+'%"></div></div>'
+      +'<div class="bar-count">'+e[1]+'</div></div>';
+  }).join('')
+  :'<div style="color:var(--ink-muted);font-size:13px;text-align:center;padding:12px">Aucune donnée</div>';
+}
+
+function renderMonthChart() {
+  var now=new Date();
+  var months=[];
+  for(var i=7;i>=0;i--){var d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({y:d.getFullYear(),m:d.getMonth(),lbl:d.toLocaleDateString('fr-FR',{month:'short',year:'2-digit'})});}
+  var counts=months.map(function(mo){return STATE.signalements.filter(function(s){var sd=new Date(s.date||s.created_at);return sd.getMonth()===mo.m&&sd.getFullYear()===mo.y;}).length;});
+  var maxC=Math.max.apply(null,counts)||1;
+  document.getElementById('month-chart').innerHTML=counts.map(function(c,i){
+    return '<div class="mc-bar" style="height:'+Math.max(3,Math.round(c/maxC*100))+'%" data-tip="'+months[i].lbl+': '+c+'"></div>';
+  }).join('');
+  document.getElementById('month-labels').innerHTML=months.map(function(m){return '<div class="mc-lbl">'+m.lbl+'</div>';}).join('');
+}
+
+function updateSB() {
+  var now=new Date();
+  var m=STATE.signalements.filter(function(s){var d=new Date(s.created_at||s.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();}).length;
+  document.getElementById('sb-month').textContent=m;
+  document.getElementById('sb-repair').textContent=STATE.signalements.filter(function(s){return s.statut==='En réparation';}).length;
+  document.getElementById('sb-clos').textContent=STATE.signalements.filter(function(s){return s.statut==='Clos';}).length;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FILTRES & TRI
+═══════════════════════════════════════════════════════════════ */
+function buildLieuFilter() {
+  var lieux=[...new Set(STATE.signalements.map(function(s){return s.lieu;}).filter(Boolean))].sort();
+  var sel=document.getElementById('f-lieu'), cur=sel.value;
+  sel.innerHTML='<option value="">Tous lieux</option>'+lieux.map(function(l){return '<option'+(l===cur?' selected':'')+'>'+esc(l)+'</option>';}).join('');
+}
+function buildRefFilter() {
+  var refs=[...new Set(STATE.reparations.map(function(r){return r.referent;}).filter(Boolean))].sort();
+  var sel=document.getElementById('r-ref'), cur=sel.value;
+  sel.innerHTML='<option value="">Tous référents</option>'+refs.map(function(r){return '<option'+(r===cur?' selected':'')+'>'+esc(r)+'</option>';}).join('');
+}
+function getVal(id) { var el=document.getElementById(id); return el?el.value:''; }
+function applyFilters() { STATE.sigPage=1; renderAll(); }
+function applyRepFilters() { STATE.repPage=1; renderReps(); }
+function resetSigFilters() {
+  ['f-txt','f-grav','f-stat','f-lieu','f-d1','f-d2'].forEach(function(i){var el=document.getElementById(i);if(el)el.value='';});
+  STATE.sigPage=1; renderAll();
+}
+function resetRepFilters() {
+  ['r-txt','r-stat','r-ref','r-d1','r-d2'].forEach(function(i){var el=document.getElementById(i);if(el)el.value='';});
+  STATE.repPage=1; renderReps();
+}
+function sortBy(table, key) {
+  var s = table==='sig'?STATE.sigSort:STATE.repSort;
+  if (s.key===key) s.asc=!s.asc; else {s.key=key;s.asc=true;}
+  if(table==='sig') renderAll(); else renderReps();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER SIGNALEMENTS
+═══════════════════════════════════════════════════════════════ */
+function renderAll() {
+  var txt=getVal('f-txt').toLowerCase(), grav=getVal('f-grav'), stat=getVal('f-stat'), lieu=getVal('f-lieu'), d1=getVal('f-d1'), d2=getVal('f-d2');
+  var data=STATE.signalements.filter(function(s){
+    return (!txt||JSON.stringify(s).toLowerCase().indexOf(txt)!==-1)
+      &&(!grav||s.gravite===grav)&&(!stat||s.statut===stat)
+      &&(!lieu||s.lieu===lieu)&&(!d1||s.date>=d1)&&(!d2||s.date<=d2);
+  });
+  data.sort(function(a,b){var k=STATE.sigSort.key,va=a[k]||'',vb=b[k]||'';return STATE.sigSort.asc?(va>vb?1:va<vb?-1:0):(va<vb?1:va>vb?-1:0);});
+  var cnt=document.getElementById('count-lbl');
+  if(cnt) cnt.textContent=data.length+' résultat'+(data.length!==1?'s':'');
+  var total=Math.max(1,Math.ceil(data.length/STATE.PAGE));
+  if(STATE.sigPage>total) STATE.sigPage=total;
+  var page=data.slice((STATE.sigPage-1)*STATE.PAGE,STATE.sigPage*STATE.PAGE);
+  document.getElementById('tbody-all').innerHTML=page.length?page.map(function(s){
+    var act="<button class='btn btn-ghost btn-sm' onclick='openDetail("+s.id+")'>Voir</button>"
+      +" <button class='btn btn-sm btn-amber' onclick='openModal(\"reparation\",{id:"+s.id+"})'> + Réparer</button>";
+    if(s.statut!=='Clos') act+=" <button class='btn btn-sm btn-green' onclick='clore("+s.id+")'>Clore</button>";
+    var photos=s.photos_urls&&s.photos_urls.length?'<span style="font-size:13px" title="'+s.photos_urls.length+' photo(s)">📷'+s.photos_urls.length+'</span>':'';
+    return '<tr>'
+      +'<td style="font-family:monospace;font-size:11px;color:var(--ink-muted)">'+(s.num||'—')+'</td>'
+      +'<td style="font-weight:600">'+fd(s.date)+'</td>'
+      +'<td><strong>'+esc(s.lieu)+'</strong></td>'
+      +'<td style="color:var(--ink-light)">'+esc(s.type)+'</td>'
+      +'<td>'+gbadge(s.gravite)+'</td>'
+      +'<td style="color:var(--ink-light)">'+esc(s.signale_par||s.signalePar||'')+'</td>'
+      +'<td>'+(s.eleve?esc(s.eleve):'<span style="color:var(--ink-muted)">—</span>')+'</td>'
+      +'<td>'+sbadge(s.statut)+'</td>'
+      +'<td>'+photos+'</td>'
+      +'<td style="white-space:nowrap">'+act+'</td></tr>';
+  }).join('')
+  :'<tr><td colspan="10"><div class="empty"><div class="ico">📋</div><p>Aucun résultat.</p></div></td></tr>';
+  renderPagination('pag-sig',STATE.sigPage,total,function(p){STATE.sigPage=p;renderAll();});
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER RÉPARATIONS
+═══════════════════════════════════════════════════════════════ */
+function renderReps() {
+  var txt=getVal('r-txt').toLowerCase(), stat=getVal('r-stat'), ref=getVal('r-ref'), d1=getVal('r-d1'), d2=getVal('r-d2');
+  var data=STATE.reparations.filter(function(r){
+    var s=STATE.signalements.find(function(x){return Number(x.id)===Number(r.signa_id);})||{};
+    return (!txt||(JSON.stringify(r)+JSON.stringify(s)).toLowerCase().indexOf(txt)!==-1)
+      &&(!stat||r.statut===stat)&&(!ref||r.referent===ref)
+      &&(!d1||r.debut>=d1)&&(!d2||r.debut<=d2);
+  });
+  data.sort(function(a,b){
+    var k=STATE.repSort.key;
+    var sa=STATE.signalements.find(function(x){return Number(x.id)===Number(a.signa_id);})||{};
+    var sb=STATE.signalements.find(function(x){return Number(x.id)===Number(b.signa_id);})||{};
+    var va=k==='eleve'?sa.eleve:k==='classe'?sa.classe:k==='lieu'?sa.lieu:k==='signa_num'?sa.num:(a[k]||'');
+    var vb=k==='eleve'?sb.eleve:k==='classe'?sb.classe:k==='lieu'?sb.lieu:k==='signa_num'?sb.num:(b[k]||'');
+    va=va||'';vb=vb||'';
+    return STATE.repSort.asc?(va>vb?1:va<vb?-1:0):(va<vb?1:va>vb?-1:0);
+  });
+  var total=Math.max(1,Math.ceil(data.length/STATE.PAGE));
+  if(STATE.repPage>total) STATE.repPage=total;
+  var page=data.slice((STATE.repPage-1)*STATE.PAGE,STATE.repPage*STATE.PAGE);
+  document.getElementById('tbody-rep').innerHTML=page.length?page.map(function(r){
+    var s=STATE.signalements.find(function(x){return Number(x.id)===Number(r.signa_id);})||{};
+    var act='';
+    if(r.statut!=='Terminée') act+="<button class='btn btn-sm btn-green' onclick='cloreRep("+r.id+")'>Terminée</button> ";
+    act+="<button class='btn btn-ghost btn-sm' onclick='genFiche("+r.signa_id+")'>Fiche</button>";
+    return '<tr>'
+      +'<td style="font-family:monospace;font-size:11px;color:var(--ink-muted)">'+String(r.id).slice(-6)+'</td>'
+      +'<td style="font-family:monospace;font-size:11px;color:var(--ink-muted)">'+(s.num||'—')+'</td>'
+      +'<td>'+(s.eleve?esc(s.eleve):'<span style="color:var(--ink-muted)">—</span>')+'</td>'
+      +'<td>'+esc(s.classe||'—')+'</td>'
+      +'<td style="color:var(--ink-light)">'+esc(s.lieu||'—')+' · '+esc(s.type||'—')+'</td>'
+      +'<td>'+esc(r.mesure)+'</td>'
+      +'<td>'+esc(r.referent||'—')+'</td>'
+      +'<td>'+fd(r.debut)+'</td>'
+      +'<td>'+sbadge(r.statut)+'</td>'
+      +'<td style="white-space:nowrap">'+act+'</td></tr>';
+  }).join('')
+  :'<tr><td colspan="10"><div class="empty"><div class="ico">🔧</div><p>Aucune mesure.</p></div></td></tr>';
+  renderPagination('pag-rep',STATE.repPage,total,function(p){STATE.repPage=p;renderReps();});
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGINATION
+═══════════════════════════════════════════════════════════════ */
+function renderPagination(cid,cur,total,cb) {
+  var el=document.getElementById(cid); if(!el||total<=1){if(el)el.innerHTML='';return;}
+  var h="<button class='page-btn' "+(cur===1?'disabled':'')+" onclick='("+cb.toString()+")"+(cur-1)+"'>‹</button>";
+  var from=Math.max(1,cur-2),to=Math.min(total,cur+2);
+  if(from>1)h+="<button class='page-btn' onclick='("+cb.toString()+")1'>1</button>"+(from>2?"<span class='page-info'>…</span>":'');
+  for(var i=from;i<=to;i++)h+="<button class='page-btn"+(i===cur?' active':'')+"' onclick='("+cb.toString()+")"+i+"'>"+i+"</button>";
+  if(to<total)h+=(to<total-1?"<span class='page-info'>…</span>":"")+"<button class='page-btn' onclick='("+cb.toString()+")"+total+"'>"+total+"</button>";
+  h+="<button class='page-btn' "+(cur===total?'disabled':'')+" onclick='("+cb.toString()+")"+(cur+1)+"'>›</button>";
+  h+="<span class='page-info'>"+cur+"/"+total+"</span>";
+  el.innerHTML=h;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DÉTAIL
+═══════════════════════════════════════════════════════════════ */
+function openDetail(id) {
+  var s=STATE.signalements.find(function(x){return Number(x.id)===Number(id);}); if(!s)return;
+  document.getElementById('det-t').textContent=s.lieu+' — '+fd(s.date);
+  document.getElementById('det-badges').innerHTML=gbadge(s.gravite)+' '+sbadge(s.statut);
+  var reps=STATE.reparations.filter(function(r){return Number(r.signa_id)===Number(id);});
+  var photosHtml='';
+  if(s.photos_urls&&s.photos_urls.length){
+    photosHtml='<div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;margin-bottom:5px">Photos</div>'
+      +'<div class="detail-photos">'+s.photos_urls.map(function(u,i){
+        return '<img class="detail-photo" src="'+esc(u)+'" alt="Photo '+(i+1)+'" onclick="openLightbox(\''+u.replace(/'/g,"\\'")+'\')">';
+      }).join('')+'</div>';
+  }
+  var repsHtml='';
+  if(reps.length){
+    repsHtml='<div style="margin-top:12px;font-size:11px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;margin-bottom:6px">Mesures de réparation ('+reps.length+')</div>';
+    reps.forEach(function(r){
+      repsHtml+='<div class="rep-item">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">'
+        +'<strong style="font-size:13px">'+esc(r.mesure)+'</strong>'+sbadge(r.statut)+'</div>'
+        +'<div style="font-size:11px;color:var(--ink-muted)">'+fd(r.debut)+' — '+esc(r.referent||'—')+(r.duree?' ('+esc(r.duree)+')':'')+'</div>'
+        +(r.notes?'<div style="margin-top:4px;font-size:12px;color:var(--ink-light)">'+esc(r.notes)+'</div>':'')
+        +(r.cloture?'<div style="margin-top:3px;font-size:12px;color:var(--green);font-weight:600">Clôture : '+esc(r.cloture)+'</div>':'')
+        +'</div>';
+    });
+  }
+  var descHtml=s.description?'<div style="background:var(--surface2);border-radius:8px;padding:10px;font-size:13px;margin:10px 0;color:var(--ink-light);border:1px solid var(--border)">'+esc(s.description)+'</div>':'';
+  document.getElementById('det-body').innerHTML=
+    '<div class="dr"><div class="dk">N° dossier</div><div class="dv" style="font-family:monospace">'+(s.num||'—')+'</div></div>'
+    +'<div class="dr"><div class="dk">Date / heure</div><div class="dv">'+fd(s.date)+(s.heure?' à '+s.heure:'')+'</div></div>'
+    +'<div class="dr"><div class="dk">Lieu</div><div class="dv">'+esc(s.lieu)+'</div></div>'
+    +'<div class="dr"><div class="dk">Type</div><div class="dv">'+esc(s.type)+'</div></div>'
+    +'<div class="dr"><div class="dk">Signalé par</div><div class="dv">'+esc(s.signale_par||s.signalePar||'')+'</div></div>'
+    +'<div class="dr"><div class="dk">Élève</div><div class="dv">'+(s.eleve?esc(s.eleve)+(s.classe?' ('+esc(s.classe)+')':''):'Non identifié')+'</div></div>'
+    +'<div class="dr"><div class="dk">Famille informée</div><div class="dv">'+(s.famille==='oui'?'✓ Oui':'✗ Non encore')+'</div></div>'
+    +descHtml+photosHtml+repsHtml;
+  var ft="<button class='btn btn-ghost' onclick=\"closeModal('detail')\">Fermer</button>";
+  ft+=" <button class='btn btn-amber' onclick=\"closeModal('detail');openModal('reparation',{id:"+id+"})\">+ Mesure réparation</button>";
+  if(s.statut!=='Clos') ft+=" <button class='btn btn-green' onclick=\"clore("+id+");closeModal('detail')\">Clore</button>";
+  ft+=" <button class='btn btn-primary' onclick=\"genFicheAndGo("+id+")\">Générer fiche</button>";
+  document.getElementById('det-ft').innerHTML=ft;
+  document.getElementById('mo-detail').classList.add('open');
+}
+
+function openLightbox(src) {
+  document.getElementById('lb-img').src=src;
+  document.getElementById('lightbox').classList.add('open');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FICHE ÉDUCATIVE
+═══════════════════════════════════════════════════════════════ */
+function buildFicheSelect() {
+  var sel=document.getElementById('fiche-select');
+  sel.innerHTML='<option value="">— Choisir —</option>'+STATE.signalements.map(function(s){
+    return '<option value="'+s.id+'">'+(s.num||'—')+' — '+s.lieu+' — '+(s.eleve||'Non identifié')+' — '+fd(s.date)+'</option>';
+  }).join('');
+}
+function genFicheAndGo(id) {
+  closeModal('detail'); showSection('fiche'); buildFicheSelect();
+  document.getElementById('fiche-select').value=id; loadFiche(id);
+  toast('Fiche générée — Imprimer pour exporter.');
+}
+function genFiche(id) { showSection('fiche'); buildFicheSelect(); document.getElementById('fiche-select').value=id; loadFiche(id); }
+
+function loadFiche(id) {
+  var el=document.getElementById('fiche-content');
+  if(!id){el.innerHTML='<div class="empty"><div class="ico">📄</div><p>Sélectionnez un dossier.</p></div>';return;}
+  var s=STATE.signalements.find(function(x){return Number(x.id)===Number(id);});
+  if(!s){el.innerHTML='<div class="empty"><div class="ico">📄</div><p>Dossier introuvable.</p></div>';return;}
+  var reps=STATE.reparations.filter(function(r){return Number(r.signa_id)===Number(id);});
+  var cfg=STATE.config;
+  var h='<div class="fiche-wrap">';
+  h+='<div class="fiche-hd"><div><div class="fiche-ttl">Fiche de Réparation Éducative</div>';
+  h+='<div style="font-size:12px;color:var(--ink-muted);margin-top:3px">'+(cfg.etab||'Lycée Watteau')+' — '+(cfg.ville||'Valenciennes')+' — Document confidentiel</div></div>';
+  h+='<div class="fiche-num">N° '+(s.num||String(s.id).slice(-6))+'</div></div>';
+  h+='<div class="fiche-sec"><div class="fiche-sec-ttl">1. Identité de l\'élève</div>';
+  h+='<div class="fiche-row"><div class="fiche-key">Nom, prénom</div><div class="fiche-val">'+esc(s.eleve||'')+'</div></div>';
+  h+='<div class="fiche-row"><div class="fiche-key">Classe</div><div class="fiche-val">'+esc(s.classe||'')+'</div></div>';
+  h+='<div class="fiche-row"><div class="fiche-key">Famille informée</div><div class="fiche-val">'+(s.famille==='oui'?'Oui':'Non')+'</div></div></div>';
+  h+='<div class="fiche-sec"><div class="fiche-sec-ttl">2. Fait reproché</div>';
+  h+='<div class="fiche-row"><div class="fiche-key">Date</div><div class="fiche-val">'+fd(s.date)+(s.heure?' — '+s.heure:'')+'</div></div>';
+  h+='<div class="fiche-row"><div class="fiche-key">Lieu</div><div class="fiche-val">'+esc(s.lieu)+'</div></div>';
+  h+='<div class="fiche-row"><div class="fiche-key">Type</div><div class="fiche-val">'+esc(s.type)+'</div></div>';
+  h+='<div class="fiche-row"><div class="fiche-key">Gravité</div><div class="fiche-val">'+esc(s.gravite)+'</div></div>';
+  h+='<div class="fiche-row"><div class="fiche-key">Description</div><div class="fiche-val" style="min-height:38px">'+esc(s.description||s.desc||'')+'</div></div></div>';
+  if(s.photos_urls&&s.photos_urls.length){
+    h+='<div class="fiche-sec"><div class="fiche-sec-ttl">Photos</div><div class="fiche-photos">';
+    h+=s.photos_urls.map(function(u,i){return '<img src="'+esc(u)+'" alt="Photo '+(i+1)+'" onclick="openLightbox(\''+u.replace(/'/g,"\\'")+'\')">'; }).join('');
+    h+='</div></div>';
+  }
+  h+='<div class="fiche-sec"><div class="fiche-sec-ttl">3. Rappel de la règle</div>';
+  h+='<div style="font-size:12px;color:var(--ink-light);line-height:1.7;background:var(--surface2);padding:10px;border-radius:8px;border:1px solid var(--border)">Conformément à la Charte du Respect des Lieux et au règlement intérieur, tout élève est tenu de respecter les locaux, le matériel et les équipements. Toute dégradation volontaire ou par négligence engage la responsabilité de son auteur.</div></div>';
+  if(reps.length){
+    reps.forEach(function(r,idx){
+      h+='<div class="fiche-sec"><div class="fiche-sec-ttl">4'+(reps.length>1?'.'+String.fromCharCode(97+idx):'')+'. Mesure de réparation éducative</div>';
+      h+='<div class="fiche-row"><div class="fiche-key">Mesure décidée</div><div class="fiche-val">'+esc(r.mesure)+'</div></div>';
+      h+='<div class="fiche-row"><div class="fiche-key">Adulte référent</div><div class="fiche-val">'+esc(r.referent)+'</div></div>';
+      h+='<div class="fiche-row"><div class="fiche-key">Date de début</div><div class="fiche-val">'+fd(r.debut)+'</div></div>';
+      h+='<div class="fiche-row"><div class="fiche-key">Durée</div><div class="fiche-val">'+esc(r.duree||'')+'</div></div></div>';
+    });
+  } else {
+    h+='<div class="fiche-sec"><div class="fiche-sec-ttl">4. Mesure de réparation éducative</div>';
+    h+='<div class="fiche-row"><div class="fiche-key">Mesure décidée</div><div class="fiche-val"></div></div>';
+    h+='<div class="fiche-row"><div class="fiche-key">Adulte référent</div><div class="fiche-val"></div></div>';
+    h+='<div class="fiche-row"><div class="fiche-key">Date de début</div><div class="fiche-val"></div></div>';
+    h+='<div class="fiche-row"><div class="fiche-key">Durée</div><div class="fiche-val"></div></div></div>';
+  }
+  var rep0=reps[0]||null;
+  h+='<div class="fiche-sec"><div class="fiche-sec-ttl">5. Entretien de prise de conscience</div>';
+  h+='<div class="fiche-editable" contenteditable="true" data-field="notes" tabindex="0">'+(rep0&&rep0.notes?esc(rep0.notes):'')+'</div></div>';
+  h+='<div class="fiche-sec"><div class="fiche-sec-ttl">6. Entretien de clôture</div>';
+  h+='<div class="fiche-editable" contenteditable="true" data-field="cloture" tabindex="0">'+(rep0&&rep0.cloture?esc(rep0.cloture):'')+'</div>';
+  if(rep0) h+='<div style="margin-top:6px"><button class="btn btn-ghost btn-sm" onclick="saveCloture('+rep0.id+')">Enregistrer</button></div>';
+  h+='</div>';
+  h+='<div class="fiche-signs">';
+  h+='<div class="sign-box">Signature de l\'élève<br><br><br><br></div>';
+  h+='<div class="sign-box">Signature de l\'adulte référent<br><br><br><br></div>';
+  h+='<div class="sign-box">Signature du chef d\'établissement<br><br><br><br></div>';
+  h+='<div class="sign-box">Signature du représentant légal<br><br><br><br></div></div>';
+  h+='</div>';
+  el.innerHTML=h;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════════ */
+function gbadge(g){var c=g==='Grave'?'bg':g==='Moyenne'?'bm':'bmin';return '<span class="badge '+c+'">'+(g||'')+'</span>';}
+function sbadge(s){var m={'Ouvert':'bo','En réparation':'br','Clos':'bc','En cours':'br','Terminée':'bc'};return '<span class="badge '+(m[s]||'bo')+'">'+(s||'')+'</span>';}
+function fd(d){if(!d)return '—';var p=d.split('T')[0].split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:d;}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function countBy(arr,key){return arr.reduce(function(a,i){a[i[key]]=(a[i[key]]||0)+1;return a;},{});}
+
+/* ═══════════════════════════════════════════════════════════════
+   CSV / JSON EXPORT
+═══════════════════════════════════════════════════════════════ */
+function exportCSV() {
+  var SIG=['id','num','date','heure','lieu','type','gravite','signale_par','description','eleve','classe','famille','photos_urls','statut','created_at'];
+  var REP=['id','signa_id','mesure','referent','debut','duree','notes','cloture','statut','created_at'];
+  function cell(v){var s=String(v===null||v===undefined?'':v);if(s.indexOf(';')!==-1||s.indexOf('"')!==-1||s.indexOf('\n')!==-1)return '"'+s.replace(/"/g,'""')+'"';return s;}
+  var lines=['# Lycee Watteau - Respect des Lieux v3 - '+new Date().toLocaleDateString('fr-FR'),'# SIG;'+SIG.join(';'),'# REP;'+REP.join(';'),''];
+  STATE.signalements.forEach(function(s){var row=Object.assign({},s);row.photos_urls=JSON.stringify(s.photos_urls||[]);lines.push('SIG;'+SIG.map(function(k){return cell(row[k]);}).join(';'));});
+  STATE.reparations.forEach(function(r){lines.push('REP;'+REP.map(function(k){return cell(r[k]);}).join(';'));});
+  var blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='watteau-v3-'+new Date().toISOString().split('T')[0]+'.csv';a.click();URL.revokeObjectURL(a.href);
+  toast('Export CSV — '+STATE.signalements.length+' signalement(s).');
+}
+function exportJSON() {
+  var blob=new Blob([JSON.stringify({signalements:STATE.signalements,reparations:STATE.reparations,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='watteau-v3-'+new Date().toISOString().split('T')[0]+'.json';a.click();URL.revokeObjectURL(a.href);
+  toast('Export JSON réussi.');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PURGE
+═══════════════════════════════════════════════════════════════ */
+function purgeData() {
+  if(!confirm('Effacer TOUTES les données locales et sur Supabase ?\nCette action est IRRÉVERSIBLE.')) return;
+  STATE.signalements=[]; STATE.reparations=[]; STATE.queue=[]; STATE.nextNum=1;
+  localStorage.removeItem('rl3-sig'); localStorage.removeItem('rl3-rep'); localStorage.removeItem('rl3-queue');
+  if(STATE.online) {
+    Promise.all([
+      fetch(SUPA.url+'/rest/v1/reparations?id=neq.0',{method:'DELETE',headers:SUPA.hdr()}),
+      fetch(SUPA.url+'/rest/v1/signalements?id=neq.0',{method:'DELETE',headers:SUPA.hdr()})
+    ]).catch(function(){});
+  }
+  refreshAll(); toast('Toutes les données ont été effacées.');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════════ */
+function toast(msg,isErr) {
+  var t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.cssText='position:fixed;bottom:20px;right:20px;padding:10px 16px;border-radius:10px;'
+    +'font-family:Nunito,sans-serif;font-size:13px;font-weight:700;z-index:9999;'
+    +'box-shadow:0 4px 18px rgba(0,0,0,.15);opacity:1;max-width:400px;'
+    +'line-height:1.5;color:#fff;cursor:pointer;transition:opacity .3s;'
+    +'background:'+(isErr?'#e07070':'#2d6a4f')+';';
+  t.onclick=function(){t.style.opacity='0';};
+  clearTimeout(t._t); t._t=setTimeout(function(){t.style.opacity='0';},5000);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   KEYBOARD
+═══════════════════════════════════════════════════════════════ */
+document.querySelectorAll('.nav-item[tabindex]').forEach(function(el){
+  el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();}});
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('sql-setup-box').textContent = SQL_SCRIPT;
+  initSetup();
+});
+</script>
+</body>
+</html>
