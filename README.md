@@ -1,94 +1,130 @@
-# 🏫 Respect des Lieux
+# 🏫 Respect des Lieux v3 — Lycée Antoine Watteau
 
-> Application web de gestion des signalements de dégradations pour établissements scolaires
+> Outil de gestion des signalements de dégradations et des mesures de réparation éducative, à destination des équipes vie scolaire.
 
-![Tableau de bord](https://img.shields.io/badge/statut-actif-brightgreen)
-![Technologie](https://img.shields.io/badge/technologie-HTML%20%2F%20CSS%20%2F%20JS-blue)
+![Version](https://img.shields.io/badge/version-3.0-blue)
+![Hébergement](https://img.shields.io/badge/hébergement-GitHub%20Pages-lightgrey)
+![Base de données](https://img.shields.io/badge/base%20de%20données-Supabase-3ECF8E)
 ![Licence](https://img.shields.io/badge/licence-MIT-orange)
+![RGPD](https://img.shields.io/badge/RGPD-conforme-green)
 
 ---
 
 ## 📌 Présentation
 
-**Respect des Lieux** est une application web destinée aux établissements scolaires pour **suivre, gérer et résoudre les signalements de dégradations** (tags, graffitis, mobilier abîmé, etc.) au sein de leurs locaux.
+**Respect des Lieux v3** est une application web monopage (SPA) permettant à l'équipe vie scolaire du **Lycée Antoine Watteau** de :
 
-Elle permet au personnel et aux élèves de remonter des incidents, de les catégoriser par lieu et par type, et d'en assurer le suivi jusqu'à leur résolution.
+- **Signaler et suivre** les dégradations constatées dans l'établissement
+- **Gérer les mesures de réparation éducative** associées aux élèves concernés
+- **Visualiser en temps réel** les statistiques via un tableau de bord
+- **Générer des documents imprimables** (fiches éducatives, charte élève)
 
----
-
-## ✨ Fonctionnalités
-
-- 📊 **Tableau de bord** — Vue synthétique des signalements (total, cas graves, dossiers clos, taux de résolution)
-- 📍 **Signalements par lieu** — Visualisation des incidents par espace (salle de classe, couloir, cour…)
-- 🏷️ **Signalements par type** — Catégorisation des dégradations (tags / graffitis, mobilier, vitrerie…)
-- 📈 **Évolution mensuelle** — Graphique d'historique sur 8 mois glissants
-- 🔧 **Suivi des réparations** — Gestion de l'état d'avancement (en réparation, clos, en cours)
-- 📄 **Documents éducatifs** — Fiche éducative et Charte élève intégrées
-- 📥 **Export CSV** — Extraction des données pour reporting
-- 🔄 **Synchronisation** — Données synchronisées en temps réel
+Les données sont stockées dans **Supabase** (base SQL cloud, hébergement EU), ce qui permet un accès simultané depuis plusieurs postes de l'établissement, avec synchronisation en temps réel.
 
 ---
 
-## 📸 Aperçu
+## ✨ Fonctionnalités détaillées
 
-![Aperçu du tableau de bord](screenshot.png)
+### 📊 Tableau de bord
+- KPIs en temps réel : total signalements, cas graves, dossiers clos, taux de résolution (objectif : 80 %)
+- Répartition des signalements **par lieu** et **par type** (graphiques à barres)
+- **Évolution mensuelle** sur 8 mois glissants
+- Tableau des **derniers signalements** avec accès rapide
+
+### 📋 Signalements
+- Création de signalements avec numérotation automatique au format `AAAA-NNNN`
+- Champs disponibles :
+  - **Lieu** : Toilettes, Couloir, Salle de classe, CDI, Cantine, Gymnase, Extérieur/Cour, Loge, Vestiaires, Autre (champ libre)
+  - **Type** : Tags/graffiti, Casse matériel, Salissures, Matériel informatique, Mobilier, Vitres/murs, Sanitaires, Autre (champ libre)
+  - **Gravité** : Mineure / Moyenne / Grave
+  - **Signalé par** : Agent, AED, CPE, Enseignant, Chef d'établissement, Élève
+  - **Description des faits** (faits objectifs uniquement — RGPD)
+  - **Élève identifié** : Nom, Prénom, Classe, Famille informée
+  - **Photos** : jusqu'à 2 photos (JPG/PNG, max 3 Mo), envoyées sur Supabase Storage
+- Filtres : gravité, statut, lieu — tri, pagination et export CSV
+
+### 🔧 Réparations
+- Gestion des **mesures de réparation éducative** liées aux dossiers élèves
+- Types de mesures disponibles :
+  - Participation au nettoyage des lieux
+  - Remise en état / réparation matérielle
+  - Affichage de sensibilisation
+  - Aide aux agents sur plage horaire
+  - Rédaction d'un engagement écrit
+  - Entretien avec le chef d'établissement
+  - Travail d'intérêt collectif
+  - Autre mesure
+- Saisie des entretiens (prise de conscience + clôture), filtres par référent et par date
+- **Génération de fiches de réparation éducative** imprimables (6 rubriques réglementaires, photos intégrées, entretiens éditables)
+
+### 📄 Documents
+- **Fiche éducative** : générée depuis un dossier élève, imprimable directement
+- **Charte élève** : 4 engagements avec zones de signature (élève + représentant légal), imprimable
+
+### ⚙️ Administration
+- Reconfiguration des identifiants Supabase
+- Export des données en **CSV** et **JSON**
+- **Purge des données** (gestion du cycle de vie RGPD)
 
 ---
 
 ## 🚀 Démo
 
-👉 [Accéder à l'application en ligne](https://darksathili-jpg.github.io/respect-des-lieux/respect-lieux-application.html)
+👉 [Accéder à l'application](https://darksathili-jpg.github.io/respect-des-lieux/respect-lieux-application.html)
 
 ---
 
-## 🛠️ Technologies utilisées
+## ⚙️ Installation & Configuration
+
+L'application ne nécessite **aucune installation locale**. Elle fonctionne directement dans le navigateur via GitHub Pages.
+
+### Prérequis
+- Un compte [Supabase](https://supabase.com) (gratuit)
+- Un projet Supabase créé avec la région EU
+
+### Étapes (~3 minutes)
+
+1. **Ouvrir l'application** via le lien GitHub Pages ci-dessus
+2. **Renseigner les identifiants Supabase** :
+   - URL du projet (`https://xxxx.supabase.co`)
+   - Clé anon publique (commence par `eyJ`)
+   > Ces informations se trouvent dans *Supabase → Project Settings → API*
+3. **Initialiser les tables** : copier le script SQL fourni dans l'application et l'exécuter via *SQL Editor → New query → RUN*
+   > Si les tables sont déjà créées sur un autre poste, passer directement à l'étape suivante.
+4. **Renseigner le nom de l'établissement** et le CPE référent, puis lancer l'application.
+
+> 💡 **Multi-postes** : sur un second poste, renseigner les mêmes identifiants Supabase — les données seront immédiatement synchronisées.
+
+---
+
+## 🛠️ Technologies
 
 | Technologie | Usage |
 |---|---|
-| HTML5 | Structure des pages |
-| CSS3 | Mise en forme et responsive |
-| JavaScript (Vanilla) | Logique métier et interactions |
-| GitHub Pages | Hébergement |
+| HTML5 / CSS3 / JavaScript Vanilla | Application monopage (SPA) |
+| [Supabase](https://supabase.com) | Base SQL cloud + Realtime + Storage photos |
+| GitHub Pages | Hébergement statique |
 
 ---
 
-## 📂 Structure du projet
+## 🔒 Conformité RGPD
 
-```
-respect-des-lieux/
-├── respect-lieux-application.html   # Application principale
-├── assets/
-│   ├── css/                         # Feuilles de style
-│   ├── js/                          # Scripts JavaScript
-│   └── img/                         # Ressources visuelles
-├── docs/
-│   ├── fiche-educative.pdf          # Fiche éducative élève
-│   └── charte-eleve.pdf             # Charte de bonne conduite
-└── README.md
-```
+> Cet outil traite des **données personnelles de mineurs**.
+
+- Les données sont stockées **exclusivement dans votre projet Supabase** (hébergement EU) — aucun tiers n'y a accès.
+- Seuls des **faits objectifs** doivent être renseignés (pas d'appréciation comportementale).
+- Avant utilisation : **déclarer le traitement au DPD académique** et **informer les familles**.
+- Une fonction de **purge des données** est disponible dans l'onglet Admin.
 
 ---
 
-## 📋 Utilisation
+## 📸 Aperçu
 
-1. **Créer un signalement** — Cliquer sur `+ Signalement`, renseigner le lieu, le type de dégradation, la gravité et l'élève concerné.
-2. **Suivre les dossiers** — Consulter l'onglet *Signalements* pour voir l'état de chaque dossier.
-3. **Gérer les réparations** — Mettre à jour le statut dans l'onglet *Réparations*.
-4. **Exporter les données** — Utiliser le bouton `↓ CSV` pour générer un rapport.
-
----
-
-## 🎯 Public cible
-
-- 👨‍🏫 Personnels d'établissement (CPE, direction, agents d'entretien)
-- 🏫 Lycées et collèges souhaitant responsabiliser leurs élèves
-- 📊 Gestionnaires cherchant un suivi structuré des dégradations
+![Tableau de bord Respect des Lieux](screenshot.png)
 
 ---
 
 ## 🤝 Contribution
-
-Les contributions sont les bienvenues ! Pour proposer une amélioration :
 
 1. Forkez le dépôt
 2. Créez une branche (`git checkout -b feature/ma-fonctionnalite`)
@@ -105,5 +141,5 @@ Ce projet est sous licence **MIT** — voir le fichier [LICENSE](LICENSE) pour p
 ---
 
 <div align="center">
-  <sub>Développé avec ❤️ pour le <strong>Lycée Antoine Watteau</strong></sub>
+  <sub>Développé pour le <strong>Lycée Antoine Watteau</strong> · Respect des Lieux v3</sub>
 </div>
