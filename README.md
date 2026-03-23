@@ -87,7 +87,7 @@ L'application ne nécessite **aucune installation locale**. Elle fonctionne dire
 1. **Ouvrir l'application** via le lien GitHub Pages ci-dessus
 2. **Renseigner les identifiants Supabase** :
    - URL du projet (`https://xxxx.supabase.co`)
-   - Clé anon publique (commence par `eyJ`)
+   - Clé anon publique (commence par `sb_publishable`)
    > Ces informations se trouvent dans *Supabase → Project Settings → API*
 3. **Initialiser les tables** : copier le script SQL fourni dans l'application et l'exécuter via *SQL Editor → New query → RUN*
    > Si les tables sont déjà créées sur un autre poste, passer directement à l'étape suivante.
