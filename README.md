@@ -120,7 +120,7 @@ L'application ne nécessite **aucune installation locale**. Elle fonctionne dire
 
 ## 📸 Aperçu
 
-![Tableau de bord Respect des Lieux](screenshot.png)
+![Tableau de bord Respect des Lieux](tableau_bord.png)
 
 ---
 
