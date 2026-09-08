@@ -1,6 +1,6 @@
 /*
  * ============================================================
- * RESPECT DES LIEUX — SECURITY PATCH V4
+ * RESPECT DES LIEUX — SECURITY PATCH V4.1
  * ============================================================
  *
  * À charger APRÈS le script principal de index.html :
@@ -17,7 +17,8 @@
  * - transforme le bucket rl-photos en usage privé ;
  * - génère des URLs temporaires pour afficher les photos ;
  * - empêche l'ancien fallback Base64 en cas d'échec d'upload ;
- * - remplace l'ancien script SQL dangereux qui désactivait RLS.
+ * - remplace l'ancien script SQL dangereux qui désactivait RLS ;
+ * - gère les invitations Supabase et permet de définir le mot de passe.
  *
  * IMPORTANT :
  * Dans Supabase, désactivez "Allow new users to sign up" et créez
@@ -34,7 +35,7 @@
   var signedCache = new Map();
 
   var SECURE_SQL = [
-    '-- Respect des Lieux V4 : utilisez le fichier supabase_secure_v4.sql fourni.',
+    '-- Respect des Lieux V4.1 : utilisez le fichier supabase_secure_v4.sql fourni.',
     '-- IMPORTANT : RLS doit rester ACTIVE.',
     '-- Ne réutilisez jamais ALTER TABLE ... DISABLE ROW LEVEL SECURITY.'
   ].join('\n');
@@ -291,6 +292,281 @@
   };
 
   window.RL_AUTH = AUTH;
+
+  // ==========================================================
+  // V4.1 — Invitation / récupération : définition du mot de passe
+  // ==========================================================
+
+  function parseAuthCallback() {
+    var hash = new URLSearchParams(
+      window.location.hash && window.location.hash.charAt(0) === '#'
+        ? window.location.hash.slice(1)
+        : window.location.hash
+    );
+
+    var query = new URLSearchParams(window.location.search || '');
+
+    var error =
+      hash.get('error_description') ||
+      hash.get('error') ||
+      query.get('error_description') ||
+      query.get('error');
+
+    if (error) {
+      return {
+        error: decodeURIComponent(String(error).replace(/\+/g, ' '))
+      };
+    }
+
+    var accessToken = hash.get('access_token');
+    var refreshToken = hash.get('refresh_token');
+    var type = hash.get('type') || query.get('type') || '';
+    var expiresIn = Number(hash.get('expires_in') || 3600);
+
+    if (!accessToken) return null;
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken || '',
+      token_type: hash.get('token_type') || 'bearer',
+      expires_in: expiresIn,
+      type: type
+    };
+  }
+
+  function cleanAuthUrl() {
+    try {
+      var clean = window.location.pathname;
+      if (window.location.search) {
+        var q = new URLSearchParams(window.location.search);
+        [
+          'type',
+          'error',
+          'error_code',
+          'error_description',
+          'code',
+          'token',
+          'token_hash'
+        ].forEach(function (k) { q.delete(k); });
+
+        var s = q.toString();
+        if (s) clean += '?' + s;
+      }
+      window.history.replaceState({}, document.title, clean);
+    } catch (e) {}
+  }
+
+  function ensurePasswordSetupUi() {
+    var existing = document.getElementById('rl-password-setup-screen');
+    if (existing) return existing;
+
+    var style = document.createElement('style');
+    style.textContent = [
+      '#rl-password-setup-screen{position:fixed;inset:0;z-index:5100;',
+      'background:linear-gradient(135deg,#edf3f8 0%,#f8fafc 100%);',
+      'display:none;align-items:center;justify-content:center;padding:22px;',
+      'font-family:Nunito,Arial,sans-serif}',
+      '#rl-password-setup-screen.open{display:flex}',
+      '.rl-pass-card{width:min(460px,100%);background:#fff;',
+      'border:1px solid #dde6ef;border-radius:20px;padding:34px 36px;',
+      'box-shadow:0 18px 60px rgba(44,62,80,.16)}',
+      '.rl-pass-title{font-family:"Playfair Display",Georgia,serif;',
+      'font-size:25px;font-weight:700;color:#2c3e50;margin-bottom:4px}',
+      '.rl-pass-sub{font-size:12px;color:#8aa0b1;margin-bottom:22px}',
+      '.rl-pass-info{background:#edfaf3;border:1px solid #bfe7d0;',
+      'border-radius:9px;padding:11px 12px;color:#39745a;font-size:12px;',
+      'margin-bottom:18px;line-height:1.5}',
+      '.rl-pass-email{font-weight:800;word-break:break-word}',
+      '.rl-pass-field{display:flex;flex-direction:column;gap:5px;margin-bottom:13px}',
+      '.rl-pass-field label{font-size:12px;font-weight:700;color:#5d7080}',
+      '.rl-pass-field input{font:inherit;padding:11px 12px;border:1.5px solid #dde6ef;',
+      'border-radius:9px;outline:none;color:#2c3e50}',
+      '.rl-pass-field input:focus{border-color:#6c8ebf;',
+      'box-shadow:0 0 0 3px rgba(108,142,191,.12)}',
+      '.rl-pass-btn{width:100%;border:0;border-radius:9px;padding:11px 14px;',
+      'background:#6c8ebf;color:#fff;font:700 13px Nunito,Arial,sans-serif;',
+      'cursor:pointer;margin-top:5px}',
+      '.rl-pass-btn:disabled{opacity:.55;cursor:wait}',
+      '.rl-pass-msg{display:none;margin-top:12px;padding:9px 11px;',
+      'border-radius:8px;font-size:12px;line-height:1.5}',
+      '.rl-pass-msg.err{display:block;background:#fdf0f0;color:#b54b4b}',
+      '.rl-pass-msg.ok{display:block;background:#edfaf3;color:#39745a}',
+      '.rl-pass-foot{font-size:10px;color:#9ab0c0;text-align:center;',
+      'margin-top:17px;line-height:1.5}'
+    ].join('');
+    document.head.appendChild(style);
+
+    var screen = document.createElement('div');
+    screen.id = 'rl-password-setup-screen';
+    screen.innerHTML =
+      '<div class="rl-pass-card">' +
+        '<div class="rl-pass-title">Créer votre mot de passe</div>' +
+        '<div class="rl-pass-sub">Respect des Lieux — activation de votre accès</div>' +
+        '<div class="rl-pass-info">✅ Votre invitation Supabase a été reconnue.<br>' +
+          'Définissez maintenant votre mot de passe pour terminer la création du compte.' +
+          '<div id="rl-pass-email" class="rl-pass-email" style="margin-top:7px"></div>' +
+        '</div>' +
+        '<form id="rl-password-setup-form">' +
+          '<div class="rl-pass-field">' +
+            '<label for="rl-new-password">Nouveau mot de passe</label>' +
+            '<input id="rl-new-password" type="password" autocomplete="new-password" minlength="8" required>' +
+          '</div>' +
+          '<div class="rl-pass-field">' +
+            '<label for="rl-new-password-confirm">Confirmer le mot de passe</label>' +
+            '<input id="rl-new-password-confirm" type="password" autocomplete="new-password" minlength="8" required>' +
+          '</div>' +
+          '<button id="rl-pass-submit" class="rl-pass-btn" type="submit">Créer mon mot de passe</button>' +
+          '<div id="rl-pass-msg" class="rl-pass-msg"></div>' +
+        '</form>' +
+        '<div class="rl-pass-foot">Le mot de passe est transmis directement à Supabase via HTTPS et n’est pas enregistré dans l’application.</div>' +
+      '</div>';
+
+    document.body.appendChild(screen);
+
+    screen.querySelector('#rl-password-setup-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      var p1 = screen.querySelector('#rl-new-password').value;
+      var p2 = screen.querySelector('#rl-new-password-confirm').value;
+      var btn = screen.querySelector('#rl-pass-submit');
+      var msg = screen.querySelector('#rl-pass-msg');
+
+      msg.className = 'rl-pass-msg';
+      msg.textContent = '';
+
+      if (p1.length < 8) {
+        msg.className = 'rl-pass-msg err';
+        msg.textContent = 'Choisissez un mot de passe d’au moins 8 caractères.';
+        return;
+      }
+
+      if (p1 !== p2) {
+        msg.className = 'rl-pass-msg err';
+        msg.textContent = 'Les deux mots de passe ne sont pas identiques.';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Enregistrement…';
+
+      try {
+        var r = await fetch(SUPA.url + '/auth/v1/user', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPA.key,
+            'Authorization': 'Bearer ' + AUTH.accessToken
+          },
+          body: JSON.stringify({ password: p1 })
+        });
+
+        var body = await r.json().catch(function () { return {}; });
+
+        if (!r.ok) {
+          throw new Error(
+            body.msg ||
+            body.message ||
+            body.error_description ||
+            body.error ||
+            'Supabase a refusé ce mot de passe.'
+          );
+        }
+
+        AUTH.session.user = body;
+        try {
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify(AUTH.session));
+        } catch (e) {}
+
+        msg.className = 'rl-pass-msg ok';
+        msg.textContent = 'Mot de passe créé. Ouverture de l’application…';
+
+        await new Promise(function (resolve) { setTimeout(resolve, 500); });
+
+        screen.classList.remove('open');
+        await launchAuthenticatedApp();
+      } catch (err) {
+        msg.className = 'rl-pass-msg err';
+        msg.textContent = err.message || 'Impossible de créer le mot de passe.';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Créer mon mot de passe';
+      }
+    });
+
+    return screen;
+  }
+
+  async function showPasswordSetupScreen(flowType) {
+    var screen = ensurePasswordSetupUi();
+
+    if (document.getElementById('main-app')) {
+      document.getElementById('main-app').style.display = 'none';
+    }
+
+    if (document.getElementById('rl-auth-screen')) {
+      document.getElementById('rl-auth-screen').classList.remove('open');
+    }
+
+    if (document.getElementById('loading-overlay')) {
+      document.getElementById('loading-overlay').classList.add('hidden');
+    }
+
+    var user = await AUTH.getUser();
+    if (user) {
+      AUTH.session.user = user;
+      try {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(AUTH.session));
+      } catch (e) {}
+    }
+
+    var title = screen.querySelector('.rl-pass-title');
+    var sub = screen.querySelector('.rl-pass-sub');
+
+    if (flowType === 'recovery') {
+      title.textContent = 'Choisir un nouveau mot de passe';
+      sub.textContent = 'Respect des Lieux — récupération du compte';
+    } else {
+      title.textContent = 'Créer votre mot de passe';
+      sub.textContent = 'Respect des Lieux — activation de votre accès';
+    }
+
+    var email = screen.querySelector('#rl-pass-email');
+    email.textContent = user && user.email ? user.email : '';
+
+    screen.classList.add('open');
+
+    setTimeout(function () {
+      var p = screen.querySelector('#rl-new-password');
+      if (p) p.focus();
+    }, 50);
+  }
+
+  async function consumeAuthCallback() {
+    var callback = parseAuthCallback();
+    if (!callback) return false;
+
+    if (callback.error) {
+      cleanAuthUrl();
+      showAuthScreen(
+        'Le lien Supabase est invalide ou a expiré : ' + callback.error +
+        '. Renvoyez une nouvelle invitation.'
+      );
+      return true;
+    }
+
+    AUTH.save(callback);
+
+    // Important : le JWT d'invitation ne doit pas rester visible dans l'URL.
+    cleanAuthUrl();
+
+    if (callback.type === 'invite' || callback.type === 'recovery') {
+      await showPasswordSetupScreen(callback.type);
+      return true;
+    }
+
+    // Autres callbacks valides : on conserve la session et on poursuit.
+    return false;
+  }
 
   async function secureFetch(url, options, retry) {
     options = options || {};
@@ -910,6 +1186,12 @@
       // La configuration initiale reste affichée.
       return;
     }
+
+    // V4.1 : une invitation Supabase arrive avec une session temporaire
+    // dans le fragment #... de l'URL. Elle doit être consommée AVANT
+    // l'affichage du formulaire de connexion.
+    var callbackHandled = await consumeAuthCallback();
+    if (callbackHandled) return;
 
     var valid = await AUTH.ensureValid();
 
