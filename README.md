@@ -80,7 +80,7 @@ L’interface permet de retrouver les signalements enregistrés et de suivre leu
 
 ---
 
-# 🔐 Sécurité — évolution V4 / V4.1 / V4.2
+# 🔐 Sécurité et fiabilité — V4.3
 
 La sécurité de l’application a fait l’objet d’une refonte importante.
 
@@ -120,29 +120,35 @@ Accès à Respect des Lieux
 
 La **V4.1** détecte automatiquement les liens d’invitation Supabase et affiche un écran permettant à l’utilisateur de définir son mot de passe.
 
-## V4.2 — réduction de la charge Supabase
+## V4.3 — Reliability Gate
 
-La V4.2 corrige un problème de consommation inutile des ressources PostgreSQL :
+La V4.3 transforme les correctifs d'urgence en architecture permanente :
 
-- suppression du polling automatique toutes les 30 secondes ;
-- suppression des rafraîchissements concurrents ;
-- actualisation automatique uniquement au retour sur l’onglet, avec une temporisation minimale de 2 minutes ;
-- bouton **Actualiser** pour déclencher volontairement une synchronisation ;
-- délai maximal sur les appels réseau afin d’éviter les attentes indéfinies ;
-- messages explicites lorsque Supabase est indisponible ou saturé ;
-- requêtes REST avec une liste explicite de colonnes ;
-- ajout d’un script SQL sécurisé avec RLS actif et index adaptés ;
-- ajout d’un diagnostic en lecture seule pour contrôler les scans, les index, la taille des lignes et d’éventuelles anciennes photos Base64.
+- suppression physique du polling toutes les 30 secondes ;
+- bootstrap unique et protection contre les initialisations concurrentes ;
+- aucun cache local persistant des signalements ou réparations ;
+- aucune écriture métier hors-ligne ;
+- succès affiché uniquement après confirmation Supabase ;
+- identifiants et numéros de dossier générés côté PostgreSQL ;
+- suppression métier interdite au navigateur ;
+- bucket photo privé, JPEG, 3 Mo maximum et 2 photos par dossier ;
+- liste blanche des adresses autorisées, contrôlée également lors de la création d'un compte Auth ;
+- contraintes de taille et d'intégrité imposées côté base ;
+- diagnostic navigateur via `RL_DIAG.snapshot()` ;
+- fenêtre de données bornée et détection de proximité de saturation ;
+- audit de charge avec 5 000 signalements et 10 000 réparations synthétiques.
 
-Les fichiers concernés sont :
-
-`v4-2-hotfix.js`  
-`supabase_secure_v4.sql`  
-`diagnostic-v4.2.sql`
+Le rapport complet est disponible dans [AUDIT-V4.3.md](./AUDIT-V4.3.md).
 
 > [!IMPORTANT]
-> La V4.2 ne désactive jamais RLS. Le script SQL ne doit être exécuté que lorsque le projet Supabase répond normalement et après vérification du diagnostic.
+> La V4.3 ne prétend pas rendre le plan Free illimité. Elle vise à rendre la charge bornée, les défaillances visibles et à empêcher les principaux scénarios de perte silencieuse provoqués par le frontend.
 
+Les fichiers structurants sont désormais :
+
+`config.js`  
+`security-v4.js`  
+`supabase_secure_v4.sql`  
+`AUDIT-V4.3.md`
 
 ---
 
@@ -167,8 +173,10 @@ Les politiques couvrent :
 
 | Table | SELECT | INSERT | UPDATE | DELETE |
 |---|:---:|:---:|:---:|:---:|
-| `signalements` | ✅ | ✅ | ✅ | ✅ |
-| `reparations` | ✅ | ✅ | ✅ | ✅ |
+| `signalements` | ✅ | ✅ | ✅ | ❌ |
+| `reparations` | ✅ | ✅ | ✅ | ❌ |
+
+La suppression globale n'est pas exposée dans l'application. Une opération destructive doit être réalisée comme procédure d'administration, avec sauvegarde préalable.
 
 Un utilisateur non authentifié ne doit donc pas pouvoir lire directement les données via l’API REST publique.
 
@@ -363,6 +371,8 @@ le fournisseur Email doit rester activé.
 
 Pour un déploiement contrôlé dans un établissement, les inscriptions publiques doivent être désactivées.
 
+La V4.3 ajoute en plus un trigger PostgreSQL sur `auth.users` : même si le réglage d'inscription publique était réactivé par erreur, une adresse absente de `public.authorized_users` est refusée.
+
 L’objectif est :
 
 ```text
@@ -427,6 +437,7 @@ Le fichier de sécurité doit être chargé **après le script principal de l’
 Exemple en fin de `index.html` :
 
 ```html
+<script src="./config.js"></script>
 <script src="./security-v4.js"></script>
 </body>
 </html>
@@ -443,6 +454,8 @@ Commit changes
 ---
 
 # ✅ Vérifications recommandées après déploiement
+
+Le rapport de référence et les seuils d'exploitation figurent dans [AUDIT-V4.3.md](./AUDIT-V4.3.md).
 
 ## Test 1 — accès non authentifié
 
@@ -546,6 +559,20 @@ Principales améliorations :
 - suppression du fallback Base64 des photos ;
 - suppression du stockage local persistant des données sensibles ;
 - utilisation du JWT utilisateur pour les requêtes REST.
+
+## V4.3 — reliability gate
+
+Principales améliorations supplémentaires :
+
+- suppression définitive du polling périodique ;
+- configuration publique isolée dans `config.js` ;
+- génération serveur des ID et numéros de dossier ;
+- confirmation serveur avant toute mise à jour optimiste de l'interface ;
+- interdiction des suppressions depuis le client ;
+- liste blanche d'e-mails appliquée à Auth et aux policies RLS ;
+- limites Storage et contraintes métier côté PostgreSQL ;
+- instrumentation `RL_DIAG` ;
+- test de charge et rapport d'audit reproductible.
 
 ## V4.1 — parcours d’invitation
 
