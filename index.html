@@ -1602,7 +1602,7 @@ function openDetail(id) {
   if(s.photos_urls&&s.photos_urls.length){
     photosHtml='<div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;margin-bottom:5px">Photos</div>'
       +'<div class="detail-photos">'+s.photos_urls.map(function(u,i){
-        return '<img class="detail-photo" src="'+esc(u)+'" alt="Photo '+(i+1)+'" onclick="openLightbox(\''+u.replace(/'/g,"\\'")+'\')">';
+        return photoTag(u,i,'detail-photo');
       }).join('')+'</div>';
   }
   var repsHtml='';
@@ -1676,21 +1676,21 @@ function loadFiche(id) {
   var cfg=STATE.config;
   var h='<div class="fiche-wrap">';
   h+='<div class="fiche-hd"><div><div class="fiche-ttl">Fiche de Réparation Éducative</div>';
-  h+='<div style="font-size:12px;color:var(--ink-muted);margin-top:3px">'+(cfg.etab||'Lycée Watteau')+' — '+(cfg.ville||'Valenciennes')+' — Document confidentiel</div></div>';
-  h+='<div class="fiche-num">N° '+(s.num||String(s.id).slice(-6))+'</div></div>';
+  h+='<div style="font-size:12px;color:var(--ink-muted);margin-top:3px">'+esc(cfg.etab||'Lycée Watteau')+' — '+esc(cfg.ville||'Valenciennes')+' — Document confidentiel</div></div>';
+  h+='<div class="fiche-num">N° '+esc(s.num||String(s.id).slice(-6))+'</div></div>';
   h+='<div class="fiche-sec"><div class="fiche-sec-ttl">1. Identité de l\'élève</div>';
   h+='<div class="fiche-row"><div class="fiche-key">Nom, prénom</div><div class="fiche-val">'+esc(s.eleve||'')+'</div></div>';
   h+='<div class="fiche-row"><div class="fiche-key">Classe</div><div class="fiche-val">'+esc(s.classe||'')+'</div></div>';
   h+='<div class="fiche-row"><div class="fiche-key">Famille informée</div><div class="fiche-val">'+(s.famille==='oui'?'Oui':'Non')+'</div></div></div>';
   h+='<div class="fiche-sec"><div class="fiche-sec-ttl">2. Fait reproché</div>';
-  h+='<div class="fiche-row"><div class="fiche-key">Date</div><div class="fiche-val">'+fd(s.date)+(s.heure?' — '+s.heure:'')+'</div></div>';
+  h+='<div class="fiche-row"><div class="fiche-key">Date</div><div class="fiche-val">'+fd(s.date)+(s.heure?' — '+esc(s.heure):'')+'</div></div>';
   h+='<div class="fiche-row"><div class="fiche-key">Lieu</div><div class="fiche-val">'+esc(s.lieu)+'</div></div>';
   h+='<div class="fiche-row"><div class="fiche-key">Type</div><div class="fiche-val">'+esc(s.type)+'</div></div>';
   h+='<div class="fiche-row"><div class="fiche-key">Gravité</div><div class="fiche-val">'+esc(s.gravite)+'</div></div>';
   h+='<div class="fiche-row"><div class="fiche-key">Description</div><div class="fiche-val" style="min-height:38px">'+esc(s.description||s.desc||'')+'</div></div></div>';
   if(s.photos_urls&&s.photos_urls.length){
     h+='<div class="fiche-sec"><div class="fiche-sec-ttl">Photos</div><div class="fiche-photos">';
-    h+=s.photos_urls.map(function(u,i){return '<img src="'+esc(u)+'" alt="Photo '+(i+1)+'" onclick="openLightbox(\''+u.replace(/'/g,"\\'")+'\')">'; }).join('');
+    h+=s.photos_urls.map(function(u,i){return photoTag(u,i,''); }).join('');
     h+='</div></div>';
   }
   h+='<div class="fiche-sec"><div class="fiche-sec-ttl">3. Rappel de la règle</div>';
