@@ -138,7 +138,97 @@ create table if not exists public.reparations (
   created_at timestamptz not null default now()
 );
 
+create sequence if not exists public.signalements_id_seq as bigint;
+create sequence if not exists public.reparations_id_seq as bigint;
+
+do $
+declare
+  v bigint;
+begin
+  select coalesce(max(id), 0) into v from public.signalements;
+  if v = 0 then
+    perform setval('public.signalements_id_seq', 1, false);
+  else
+    perform setval('public.signalements_id_seq', v, true);
+  end if;
+
+  select coalesce(max(id), 0) into v from public.reparations;
+  if v = 0 then
+    perform setval('public.reparations_id_seq', 1, false);
+  else
+    perform setval('public.reparations_id_seq', v, true);
+  end if;
+end $;
+
 alter table public.signalements
+  alter column id set default nextval('public.signalements_id_seq');
+
+alter table public.reparations
+  alter column id set default nextval('public.reparations_id_seq');
+
+alter sequence public.signalements_id_seq owned by public.signalements.id;
+alter sequence public.reparations_id_seq owned by public.reparations.id;
+
+revoke all on sequence public.signalements_id_seq from public;
+revoke all on sequence public.signalements_id_seq from anon;
+revoke all on sequence public.signalements_id_seq from authenticated;
+grant usage on sequence public.signalements_id_seq to authenticated;
+
+revoke all on sequence public.reparations_id_seq from public;
+revoke all on sequence public.reparations_id_seq from anon;
+revoke all on sequence public.reparations_id_seq from authenticated;
+grant usage on sequence public.reparations_id_seq to authenticated;
+
+create table if not exists private.signalement_counters (
+  year integer primary key,
+  last_value bigint not null check (last_value > 0)
+);
+
+revoke all on table private.signalement_counters from public;
+revoke all on table private.signalement_counters from anon;
+revoke all on table private.signalement_counters from authenticated;
+
+create or replace function private.assign_signalement_num()
+returns trigger
+language plpgsql
+security definer
+set search_path = private, public, pg_temp
+as $
+declare
+  y integer;
+  n bigint;
+begin
+  y := extract(year from current_date)::integer;
+
+  insert into private.signalement_counters(year, last_value)
+  values (y, 1)
+  on conflict (year) do update
+    set last_value = private.signalement_counters.last_value + 1
+  returning last_value into n;
+
+  new.num := y::text || '-' || lpad(n::text, 4, '0');
+  return new;
+end;
+$;
+
+revoke all on function private.assign_signalement_num() from public;
+revoke all on function private.assign_signalement_num() from anon;
+revoke all on function private.assign_signalement_num() from authenticated;
+
+drop trigger if exists rl_assign_signalement_num on public.signalements;
+create trigger rl_assign_signalement_num
+before insert on public.signalements
+for each row
+execute function private.assign_signalement_num();
+
+create unique index if not exists signalements_num_uidx
+  on public.signalements (num);
+
+alter table public.signalements
+  alter column num set not null,
+  alter column date set not null,
+  alter column lieu set not null,
+  alter column statut set not null,
   drop constraint if exists signalements_max_two_photos,
   add constraint signalements_max_two_photos
     check (coalesce(cardinality(photos_urls), 0) <= 2),
@@ -177,9 +267,23 @@ alter table public.signalements
     check (famille is null or char_length(famille) <= 16),
   drop constraint if exists signalements_statut_length,
   add constraint signalements_statut_length
-    check (statut is null or char_length(statut) <= 32);
+    check (char_length(statut) <= 32),
+  drop constraint if exists signalements_gravite_values,
+  add constraint signalements_gravite_values
+    check (gravite is null or gravite in ('Mineure','Moyenne','Grave')),
+  drop constraint if exists signalements_famille_values,
+  add constraint signalements_famille_values
+    check (famille is null or famille in ('oui','non')),
+  drop constraint if exists signalements_statut_values,
+  add constraint signalements_statut_values
+    check (statut in ('Ouvert','En réparation','Clos'));
 
 alter table public.reparations
+  alter column signa_id set not null,
+  alter column mesure set not null,
+  alter column referent set not null,
+  alter column debut set not null,
+  alter column statut set not null,
   drop constraint if exists reparations_mesure_length,
   add constraint reparations_mesure_length
     check (mesure is null or char_length(mesure) <= 200),
@@ -200,7 +304,10 @@ alter table public.reparations
     check (cloture is null or char_length(cloture) <= 3000),
   drop constraint if exists reparations_statut_length,
   add constraint reparations_statut_length
-    check (statut is null or char_length(statut) <= 32);
+    check (char_length(statut) <= 32),
+  drop constraint if exists reparations_statut_values,
+  add constraint reparations_statut_values
+    check (statut in ('En cours','Terminée'));
 
 do $$
 begin
