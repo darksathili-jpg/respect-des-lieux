@@ -366,11 +366,11 @@ td{padding:9px 12px;vertical-align:middle}
       </div>
       <div class="setup-field">
         <label for="s-etab">Nom de l'établissement</label>
-        <input type="text" id="s-etab" value="Lycée Antoine Watteau">
+        <input type="text" id="s-etab" maxlength="160" value="Lycée Antoine Watteau">
       </div>
       <div class="setup-field">
         <label for="s-cpe">CPE référent principal (optionnel)</label>
-        <input type="text" id="s-cpe" placeholder="Nom du CPE — pré-rempli dans les formulaires">
+        <input type="text" id="s-cpe" maxlength="160" placeholder="Nom du CPE — pré-rempli dans les formulaires">
       </div>
       <div class="setup-actions">
         <button class="btn btn-ghost" onclick="setupPrev()">← Retour</button>
@@ -624,7 +624,7 @@ td{padding:9px 12px;vertical-align:middle}
             <option>Loge / accueil</option><option>Vestiaires</option><option>Autre</option>
           </select>
         </div>
-        <div class="field" id="lieu-autre-wrap" style="display:none"><label for="sig-lieu-autre">Préciser le lieu</label><input type="text" id="sig-lieu-autre" placeholder="Lieu exact…"></div>
+        <div class="field" id="lieu-autre-wrap" style="display:none"><label for="sig-lieu-autre">Préciser le lieu</label><input type="text" id="sig-lieu-autre" maxlength="120" placeholder="Lieu exact…"></div>
         <div class="field">
           <label for="sig-type">Type <span style="color:var(--red)">*</span></label>
           <select id="sig-type" onchange="toggleAutre('type',this.value)" required>
@@ -633,17 +633,17 @@ td{padding:9px 12px;vertical-align:middle}
             <option>Sanitaires</option><option>Autre</option>
           </select>
         </div>
-        <div class="field" id="type-autre-wrap" style="display:none"><label for="sig-type-autre">Préciser le type</label><input type="text" id="sig-type-autre" placeholder="Type exact…"></div>
+        <div class="field" id="type-autre-wrap" style="display:none"><label for="sig-type-autre">Préciser le type</label><input type="text" id="sig-type-autre" maxlength="120" placeholder="Type exact…"></div>
         <div class="field"><label for="sig-gravite">Gravité</label><select id="sig-gravite"><option>Mineure</option><option>Moyenne</option><option>Grave</option></select></div>
         <div class="field"><label for="sig-par">Signalé par</label><select id="sig-par"><option>Agent</option><option>AED</option><option>CPE</option><option>Enseignant</option><option>Chef d'établissement</option><option>Élève</option></select></div>
         <div class="field fc2">
           <label for="sig-desc">Description des faits</label>
-          <textarea id="sig-desc" rows="3" placeholder="Décrire objectivement les faits constatés…"></textarea>
+          <textarea id="sig-desc" rows="3" maxlength="2000" placeholder="Décrire objectivement les faits constatés…"></textarea>
           <div class="field-note">Faits objectifs uniquement — pas d'appréciation comportementale (RGPD)</div>
         </div>
         <div class="fsep">Élève identifié (si connu)</div>
-        <div class="field"><label for="sig-eleve">Nom, prénom</label><input type="text" id="sig-eleve" placeholder="Nom Prenom"></div>
-        <div class="field"><label for="sig-classe">Classe</label><input type="text" id="sig-classe" placeholder="Ex : 2nde 3"></div>
+        <div class="field"><label for="sig-eleve">Nom, prénom</label><input type="text" id="sig-eleve" maxlength="160" placeholder="Nom Prenom"></div>
+        <div class="field"><label for="sig-classe">Classe</label><input type="text" id="sig-classe" maxlength="64" placeholder="Ex : 2nde 3"></div>
         <div class="field fc2"><label for="sig-famille">Famille informée ?</label><select id="sig-famille"><option value="non">Non encore</option><option value="oui">Oui</option></select></div>
         <div class="fsep">Photos (2 maximum — envoyées sur Supabase Storage)</div>
         <div class="field fc2">
@@ -691,11 +691,11 @@ td{padding:9px 12px;vertical-align:middle}
             <option>Autre mesure</option>
           </select>
         </div>
-        <div class="field"><label for="rep-ref">Adulte référent <span style="color:var(--red)">*</span></label><input type="text" id="rep-ref" placeholder="Nom du CPE ou responsable" required></div>
+        <div class="field"><label for="rep-ref">Adulte référent <span style="color:var(--red)">*</span></label><input type="text" id="rep-ref" maxlength="160" placeholder="Nom du CPE ou responsable" required></div>
         <div class="field"><label for="rep-debut">Date de début <span style="color:var(--red)">*</span></label><input type="date" id="rep-debut" required></div>
-        <div class="field fc2"><label for="rep-duree">Durée prévue</label><input type="text" id="rep-duree" placeholder="Ex : 2h, 3 séances…"></div>
-        <div class="field fc2"><label for="rep-notes">Notes — entretien de prise de conscience</label><textarea id="rep-notes" rows="3" placeholder="Ce que l'élève a exprimé lors de l'entretien initial…"></textarea></div>
-        <div class="field fc2"><label for="rep-cloture">Entretien de clôture (à compléter à l'issue)</label><textarea id="rep-cloture" rows="3" placeholder="Ce que l'élève a compris, engagement pour la suite…"></textarea></div>
+        <div class="field fc2"><label for="rep-duree">Durée prévue</label><input type="text" id="rep-duree" maxlength="120" placeholder="Ex : 2h, 3 séances…"></div>
+        <div class="field fc2"><label for="rep-notes">Notes — entretien de prise de conscience</label><textarea id="rep-notes" rows="3" maxlength="3000" placeholder="Ce que l'élève a exprimé lors de l'entretien initial…"></textarea></div>
+        <div class="field fc2"><label for="rep-cloture">Entretien de clôture (à compléter à l'issue)</label><textarea id="rep-cloture" rows="3" maxlength="3000" placeholder="Ce que l'élève a compris, engagement pour la suite…"></textarea></div>
       </div>
     </div>
     <div class="mo-ft">
