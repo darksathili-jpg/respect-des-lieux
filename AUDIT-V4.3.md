@@ -189,16 +189,19 @@ La V4.3 protège mieux contre les erreurs applicatives, mais elle ne remplace pa
 Pour le plan Free :
 
 1. effectuer un export régulier chiffré des données ;
-2. conserver cet export hors du poste utilisé pour l'application ;
-3. ne jamais stocker un export nominatif dans un dépôt GitHub public ;
-4. tester périodiquement qu'un export JSON est lisible ;
-5. avant toute migration destructive, effectuer un export et vérifier son contenu.
+2. sauvegarder **séparément le bucket Storage `rl-photos`** : l'export JSON/CSV de l'application contient les références des photos, pas les fichiers binaires eux-mêmes ;
+3. conserver base et photos sur un emplacement distinct du projet Supabase et du dépôt GitHub public ;
+4. ne jamais stocker un export nominatif dans un dépôt GitHub public ;
+5. tester périodiquement qu'un export JSON est lisible et qu'un échantillon de photos sauvegardées s'ouvre ;
+6. avant toute migration destructive, effectuer ces deux sauvegardes et vérifier leur contenu.
+
+Pour une sauvegarde technique complète, utiliser les outils Supabase CLI (`db dump` pour PostgreSQL et copie du bucket Storage) depuis un poste d'administration sécurisé.
 
 ## 11. Limite connue du plan Free
 
 Le Security Advisor peut signaler **Leaked Password Protection Disabled**. La documentation Supabase précise que la protection automatique contre les mots de passe présents dans Have I Been Pwned est disponible à partir du plan Pro.
 
-Sur le plan Free, utiliser un mot de passe long, unique et généré par un gestionnaire de mots de passe.
+Sur le plan Free, utiliser un mot de passe long, unique et généré par un gestionnaire de mots de passe. Le parcours d'activation V4.3 impose désormais **12 caractères minimum** côté application.
 
 Référence : https://supabase.com/docs/guides/auth/password-security
 
