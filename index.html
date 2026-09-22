@@ -818,7 +818,8 @@ function initSetup() {
     STATE.config = cfg.config || STATE.config;
     document.getElementById('setup-screen').classList.add('hidden');
     document.getElementById('loading-overlay').classList.remove('hidden');
-    startApp();
+    // V4.3 : security-v4.js possède l'unique bootstrap au chargement.
+    // Ne jamais lancer startApp() ici : cela créait deux démarrages concurrents.
     return;
   }
   // Sinon afficher l'écran de chargement config
@@ -984,163 +985,32 @@ function genNum() {
    START APP
 ═══════════════════════════════════════════════════════════════ */
 function startApp() {
-  setLoading('Connexion à Supabase…');
-  loadLocalCache();
-  updateAppConfig();
-  document.getElementById('main-app').style.display = 'flex';
-  refreshAll();
-  probeSupa()
-    .then(function(status) {
-      setLoading(false);
-      if (status === 'ok') {
-        setOnline(true);
-        flushQueue();
-        subscribeRealtime();
-        toast('✓ Connecté — données synchronisées.');
-      } else if (status === 'file-local') {
-        setOnline(false);
-        showFileLocalBanner();
-      } else if (status === 'rls-blocked') {
-        setOnline(false);
-        showSupaError('Accès bloqué (RLS). Dans Supabase SQL Editor, exécutez : ALTER TABLE signalements DISABLE ROW LEVEL SECURITY; ALTER TABLE reparations DISABLE ROW LEVEL SECURITY;');
-      } else if (status === 'no-tables') {
-        setOnline(false);
-        showSupaError('Tables introuvables. Copiez et exécutez le script SQL dans Supabase SQL Editor, puis rechargez la page.');
-      } else if (status === 'bad-key') {
-        setOnline(false);
-        showSupaError('URL ou clé invalide. Vérifiez Project Settings → API dans votre projet Supabase.');
-      } else {
-        setOnline(false);
-        toast('Hors-ligne — données locales utilisées.', true);
-      }
-    });
+  setLoading(false);
+  setOnline(false);
+  showSupaError(
+    'Le module de sécurité V4.3 n’est pas chargé. Synchronisation bloquée par sécurité. Rechargez la page.'
+  );
+  return Promise.resolve(false);
 }
 
 /* Distingue : ok / bad-key / no-tables / offline
    IMPORTANT : depuis file://, fetch vers domaine externe est bloqué CORS.
    On détecte ce cas et on dégrade proprement en mode offline. */
 function probeSupa() {
-  // Si le fichier est ouvert en file://, fetch externe est impossible
-  if (window.location.protocol === 'file:') {
-    console.info('Mode file:// — fetch Supabase impossible, démarrage offline.');
-    return Promise.resolve('file-local');
-  }
-  var controller = new AbortController();
-  var timeout = setTimeout(function(){ controller.abort(); }, 8000);
-  return fetch(SUPA.url + '/rest/v1/signalements?limit=1', {
-    signal: controller.signal,
-    headers: { 'apikey': SUPA.key, 'Authorization': 'Bearer ' + SUPA.key }
-  })
-  .then(function(r) {
-    clearTimeout(timeout);
-    if (r.ok) return fetchFromSupabase().then(function(){ return 'ok'; });
-    return r.text().then(function(body) {
-      console.warn('Supabase HTTP', r.status, body.slice(0, 300));
-      if (r.status === 401 || r.status === 403) {
-        if (body.indexOf('JWT') !== -1 || body.indexOf('invalid') !== -1 || body.indexOf('token') !== -1)
-          return 'bad-key';
-        // 401 sans JWT = probablement RLS — traiter comme no-tables
-        return 'rls-blocked';
-      }
-      if (r.status === 404 || body.indexOf('42P01') !== -1 || body.indexOf('does not exist') !== -1)
-        return 'no-tables';
-      return 'offline';
-    });
-  })
-  .catch(function(e) {
-    clearTimeout(timeout);
-    console.warn('Supabase fetch error:', e);
-    return 'offline';
-  });
-}
-
-
-function showFileLocalBanner() {
-  var old = document.getElementById('supa-error-banner');
-  if (old) old.remove();
-  var banner = document.createElement('div');
-  banner.id = 'supa-error-banner';
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#d4956a;color:#fff;'
-    +'padding:14px 20px;font-family:Nunito,sans-serif;font-size:13px;font-weight:600;'
-    +'z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;line-height:1.5;';
-  banner.innerHTML = '<div>'
-    + '<strong>⚠ Fichier ouvert en local (file://)</strong> — La synchronisation Supabase est impossible depuis ce mode.<br>'
-    + '<span style="font-weight:400;font-size:12px">Pour activer la sync multi-postes, déposez ce fichier sur un serveur web ou utilisez l\'extension <strong>Live Server</strong> de VS Code.</span>'
-    + '</div>'
-    + '<button onclick="this.parentElement.remove()" style="background:#fff;color:#d4956a;border:none;border-radius:6px;'
-    + 'padding:5px 12px;font-family:Nunito,sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">OK, continuer en local</button>';
-  document.body.appendChild(banner);
-}
-
-function showSupaError(msg) {
-  var old = document.getElementById('supa-error-banner');
-  if (old) old.remove();
-  var banner = document.createElement('div');
-  banner.id = 'supa-error-banner';
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#e07070;color:#fff;'
-    +'padding:12px 20px;font-family:Nunito,sans-serif;font-size:13px;font-weight:700;'
-    +'z-index:50;display:flex;align-items:center;justify-content:space-between;gap:12px;';
-  banner.innerHTML = '<span>⚠ ' + msg + '</span>'
-    + '<button onclick="reconfig()" style="background:#fff;color:#e07070;border:none;border-radius:6px;'
-    + 'padding:5px 12px;font-family:Nunito,sans-serif;font-size:12px;font-weight:700;cursor:pointer">Reconfigurer</button>';
-  document.body.appendChild(banner);
-}
-
-function updateAppConfig() {
-  var cfg = STATE.config;
-  document.getElementById('sb-etab-name').textContent = (cfg.etab||'Lycée Watteau').substring(0,22);
-  document.querySelectorAll('.charte-etab, #charte-etab').forEach(function(el){ el.textContent = cfg.etab||'Lycée Antoine Watteau'; });
+  return Promise.resolve('security-required');
 }
 
 function fetchFromSupabase() {
-  return Promise.all([
-    SUPA.get('signalements', 'order=date.desc&limit=500'),
-    SUPA.get('reparations',  'order=created_at.desc&limit=1000')
-  ]).then(function(results) {
-    STATE.signalements = results[0] || [];
-    STATE.reparations  = results[1] || [];
-    computeNextNum();
-    saveLocalCache();
-    refreshAll();
-  });
+  return Promise.reject(new Error('SECURITY_V43_REQUIRED'));
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   REALTIME (Supabase Broadcast via fetch polling fallback)
-═══════════════════════════════════════════════════════════════ */
-var realtimeInterval = null;
-var lastPollTime = new Date().toISOString();
-
+/*
+ * V4.3 : aucune synchronisation périodique dans le code principal.
+ * security-v4.js installe un rafraîchissement à la demande / au retour
+ * sur l'onglet, avec temporisation et déduplication.
+ */
 function subscribeRealtime() {
-  // Polling toutes les 30s (pas de WebSocket pour rester monofichier)
-  realtimeInterval = setInterval(function(){
-    if (!STATE.online) return;
-    var since = lastPollTime;
-    lastPollTime = new Date().toISOString();
-    Promise.all([
-      SUPA.get('signalements', 'created_at=gt.' + since + '&order=date.desc'),
-      SUPA.get('reparations',  'created_at=gt.' + since + '&order=created_at.desc')
-    ]).then(function(results){
-      var newSig = results[0]||[], newRep = results[1]||[];
-      var changed = false;
-      newSig.forEach(function(s){
-        var idx = STATE.signalements.findIndex(function(x){ return Number(x.id)===Number(s.id); });
-        if (idx === -1) { STATE.signalements.unshift(s); changed = true; }
-        else { STATE.signalements[idx] = s; }
-      });
-      newRep.forEach(function(r){
-        var idx = STATE.reparations.findIndex(function(x){ return Number(x.id)===Number(r.id); });
-        if (idx === -1) { STATE.reparations.push(r); changed = true; }
-        else { STATE.reparations[idx] = r; }
-      });
-      if (changed) {
-        computeNextNum();
-        saveLocalCache();
-        refreshAll();
-        toast('Données mises à jour depuis un autre poste.');
-      }
-    }).catch(function(){});
-  }, 30000);
+  return false;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1850,7 +1720,7 @@ document.addEventListener('DOMContentLoaded', function(){
   initSetup();
 });
 </script>
+<script src='./config.js'></script>
 <script src='./security-v4.js'></script>
-<script src='./v4-2-hotfix.js'></script>
 </body>
 </html>
