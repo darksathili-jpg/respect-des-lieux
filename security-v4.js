@@ -43,6 +43,7 @@
   var lastRefreshAt = 0;
   var focusHandler = null;
   var visibilityHandler = null;
+  var dataWindowWarned = false;
   var telemetry = {
     version: '4.3',
     requests: 0,
@@ -829,36 +830,54 @@
     telemetry.dataRefreshes += 1;
     telemetry.lastRefreshAt = new Date().toISOString();
 
+    // Une ligne sentinelle supplémentaire permet de détecter une troncature
+    // sans requête COUNT additionnelle.
     dataRefreshPromise = Promise.all([
       SUPA.get(
         'signalements',
         'select=id,num,date,heure,lieu,type,gravite,signale_par,description,eleve,classe,famille,photos_urls,statut,created_at' +
-        '&order=date.desc&limit=500'
+        '&order=date.desc&limit=501'
       ),
       SUPA.get(
         'reparations',
         'select=id,signa_id,mesure,referent,debut,duree,notes,cloture,statut,created_at' +
-        '&order=created_at.desc&limit=1000'
+        '&order=created_at.desc&limit=1001'
       )
     ]).then(function (results) {
-      STATE.signalements = results[0] || [];
-      STATE.reparations = results[1] || [];
+      var rawSig = results[0] || [];
+      var rawRep = results[1] || [];
 
-      if (STATE.signalements.length >= 500 || STATE.reparations.length >= 1000) {
-        console.warn(
-          'V4.3 — fenêtre de données atteinte : prévoir archivage/pagination serveur.',
-          {
-            signalements: STATE.signalements.length,
-            reparations: STATE.reparations.length
-          }
-        );
+      var sigExceeded = rawSig.length > 500;
+      var repExceeded = rawRep.length > 1000;
+      var nearLimit = rawSig.length >= 450 || rawRep.length >= 900;
+
+      telemetry.dataWindowExceeded = sigExceeded || repExceeded;
+      telemetry.dataWindowNearLimit = nearLimit;
+
+      STATE.signalements = rawSig.slice(0, 500);
+      STATE.reparations = rawRep.slice(0, 1000);
+
+      if ((sigExceeded || repExceeded) && !dataWindowWarned) {
+        dataWindowWarned = true;
+        console.warn('V4.3 — fenêtre serveur dépassée : pagination/archivage requis.');
+        if (typeof toast === 'function') {
+          toast(
+            'Volume de données élevé : affichage limité pour protéger Supabase. Un archivage ou une pagination serveur est requis.',
+            true
+          );
+        }
+      } else if (nearLimit && !dataWindowWarned) {
+        dataWindowWarned = true;
+        console.warn('V4.3 — fenêtre serveur proche de sa limite.', {
+          signalements: rawSig.length,
+          reparations: rawRep.length
+        });
       }
 
-      if (typeof computeNextNum === 'function') computeNextNum();
       if (typeof saveLocalCache === 'function') saveLocalCache();
       if (typeof refreshAll === 'function') refreshAll();
 
-      return results;
+      return [STATE.signalements, STATE.reparations];
     }).finally(function () {
       dataRefreshPromise = null;
     });
