@@ -801,56 +801,11 @@ var setupStep = 0;
 
 
 var SQL_SCRIPT = [
-  '-- ================================================',
-  '-- Lycée Watteau — Respect des Lieux v3',
-  '-- Collez ce script dans SQL Editor > New query',
-  '-- puis cliquez RUN',
-  '-- ================================================',
-  '',
-  '-- 1. Tables',
-  'create table if not exists signalements (',
-  '  id bigint primary key,',
-  '  num text,',
-  '  date text, heure text,',
-  '  lieu text, type text,',
-  '  gravite text, signale_par text,',
-  '  description text,',
-  '  eleve text, classe text, famille text,',
-  '  photos_urls text[],',
-  '  statut text default \'Ouvert\',',
-  '  created_at timestamptz default now()',
-  ');',
-  '',
-  'create table if not exists reparations (',
-  '  id bigint primary key,',
-  '  signa_id bigint,',
-  '  mesure text, referent text,',
-  '  debut text, duree text,',
-  '  notes text, cloture text,',
-  '  statut text default \'En cours\',',
-  '  created_at timestamptz default now()',
-  ');',
-  '',
-  '-- 2. Désactiver RLS (réseau interne établissement)',
-  'alter table signalements disable row level security;',
-  'alter table reparations  disable row level security;',
-  '',
-  '-- 3. Bucket Storage pour les photos',
-  'insert into storage.buckets (id, name, public)',
-  '  values (\'rl-photos\', \'rl-photos\', true)',
-  '  on conflict (id) do nothing;',
-  '',
-  '-- 4. Politiques Storage',
-  '-- (drop si elles existent déjà pour éviter les erreurs)',
-  'drop policy if exists \"rl_photos_insert\" on storage.objects;',
-  'drop policy if exists \"rl_photos_select\" on storage.objects;',
-  'drop policy if exists \"rl_photos_delete\" on storage.objects;',
-  'create policy \"rl_photos_insert\" on storage.objects',
-  '  for insert with check (bucket_id = \'rl-photos\');',
-  'create policy \"rl_photos_select\" on storage.objects',
-  '  for select using (bucket_id = \'rl-photos\');',
-  'create policy \"rl_photos_delete\" on storage.objects',
-  '  for delete using (bucket_id = \'rl-photos\');'
+  '-- Respect des Lieux V4.2',
+  '-- Le schéma de production est versionné dans supabase_secure_v4.sql.',
+  '-- RLS doit rester ACTIVÉ. Ne désactivez jamais Row Level Security.',
+  '-- Utilisez le fichier supabase_secure_v4.sql du dépôt GitHub.',
+  '-- Projet actif : respect-des-lieux-v2.'
 ].join('\n');
 
 function initSetup() {
@@ -1313,8 +1268,7 @@ async function uploadPendingPhotos(sigId) {
       urls.push(url);
     } catch(e) {
       console.warn('Upload photo échoué:', e);
-      toast('Photo ' + (i+1) + ' non uploadée (stockage local utilisé).', true);
-      urls.push(p.preview); // fallback base64
+      toast('Photo ' + (i+1) + ' non enregistrée. Aucun contenu Base64 ne sera stocké en base.', true);
     }
   }
   if (status) status.style.display = 'none';
