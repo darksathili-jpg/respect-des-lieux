@@ -1646,9 +1646,19 @@ function openLightbox(src) {
 ═══════════════════════════════════════════════════════════════ */
 function buildFicheSelect() {
   var sel=document.getElementById('fiche-select');
-  sel.innerHTML='<option value="">— Choisir —</option>'+STATE.signalements.map(function(s){
-    return '<option value="'+s.id+'">'+(s.num||'—')+' — '+s.lieu+' — '+(s.eleve||'Non identifié')+' — '+fd(s.date)+'</option>';
-  }).join('');
+  while(sel.firstChild) sel.removeChild(sel.firstChild);
+
+  var empty=document.createElement('option');
+  empty.value='';
+  empty.textContent='— Choisir —';
+  sel.appendChild(empty);
+
+  STATE.signalements.forEach(function(sig){
+    var opt=document.createElement('option');
+    opt.value=String(sig.id);
+    opt.textContent=(sig.num||'—')+' — '+(sig.lieu||'')+' — '+(sig.eleve||'Non identifié')+' — '+fd(sig.date);
+    sel.appendChild(opt);
+  });
 }
 function genFicheAndGo(id) {
   closeModal('detail'); showSection('fiche'); buildFicheSelect();
