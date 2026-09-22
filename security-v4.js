@@ -1,6 +1,6 @@
 /*
  * ============================================================
- * RESPECT DES LIEUX — SECURITY PATCH V4.1
+ * RESPECT DES LIEUX — SECURITY + RELIABILITY V4.3
  * ============================================================
  *
  * À charger APRÈS le script principal de index.html :
@@ -34,8 +34,27 @@
   var refreshTimer = null;
   var signedCache = new Map();
 
+  // V4.3 — Reliability Gate
+  var NETWORK_TIMEOUT_MS = 12000;
+  var MIN_AUTO_REFRESH_MS = 120000;
+  var appLaunchPromise = null;
+  var appLaunched = false;
+  var dataRefreshPromise = null;
+  var lastRefreshAt = 0;
+  var focusHandler = null;
+  var visibilityHandler = null;
+  var telemetry = {
+    version: '4.3',
+    requests: 0,
+    failures: 0,
+    dataRefreshes: 0,
+    lastRequestAt: null,
+    lastFailureAt: null,
+    lastRefreshAt: null
+  };
+
   var SECURE_SQL = [
-    '-- Respect des Lieux V4.1 : utilisez le fichier supabase_secure_v4.sql fourni.',
+    '-- Respect des Lieux V4.3 : utilisez le fichier supabase_secure_v4.sql fourni.',
     '-- IMPORTANT : RLS doit rester ACTIVE.',
     '-- Ne réutilisez jamais ALTER TABLE ... DISABLE ROW LEVEL SECURITY.'
   ].join('\n');
@@ -92,6 +111,82 @@
     window.realtimeInterval = null;
   }
 
+  function networkMessage(err) {
+    var msg = String((err && err.message) || err || '');
+
+    if (/aborted|aborterror|timeout|délai/i.test(msg)) {
+      return 'Supabase ne répond pas dans le délai imparti. Réessayez dans quelques instants.';
+    }
+
+    if (/failed to fetch|networkerror|load failed|network request failed/i.test(msg)) {
+      return 'Impossible de joindre Supabase. Vérifiez la connexion réseau puis réessayez.';
+    }
+
+    return msg || 'Connexion Supabase impossible.';
+  }
+
+  async function fetchWithTimeout(url, options, timeoutMs) {
+    options = options || {};
+    timeoutMs = Number(timeoutMs || NETWORK_TIMEOUT_MS);
+
+    telemetry.requests += 1;
+    telemetry.lastRequestAt = new Date().toISOString();
+
+    var controller = new AbortController();
+    var inheritedSignal = options.signal;
+    var timer = setTimeout(function () { controller.abort(); }, timeoutMs);
+
+    if (inheritedSignal && inheritedSignal.addEventListener) {
+      if (inheritedSignal.aborted) controller.abort();
+      else inheritedSignal.addEventListener(
+        'abort',
+        function () { controller.abort(); },
+        { once: true }
+      );
+    }
+
+    try {
+      return await fetch(
+        url,
+        Object.assign({}, options, { signal: controller.signal })
+      );
+    } catch (err) {
+      telemetry.failures += 1;
+      telemetry.lastFailureAt = new Date().toISOString();
+      throw new Error(networkMessage(err));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function stopLowIoSync() {
+    if (focusHandler) {
+      window.removeEventListener('focus', focusHandler);
+      focusHandler = null;
+    }
+    if (visibilityHandler) {
+      document.removeEventListener('visibilitychange', visibilityHandler);
+      visibilityHandler = null;
+    }
+    if (typeof window.realtimeInterval !== 'undefined' && window.realtimeInterval) {
+      clearInterval(window.realtimeInterval);
+      window.realtimeInterval = null;
+    }
+  }
+
+  window.RL_DIAG = {
+    snapshot: function () {
+      return Object.assign({}, telemetry, {
+        appLaunched: appLaunched,
+        refreshInFlight: !!dataRefreshPromise,
+        online: !!(window.STATE && STATE.online),
+        signalementsLoaded: window.STATE ? STATE.signalements.length : 0,
+        reparationsLoaded: window.STATE ? STATE.reparations.length : 0,
+        backend: window.RL_BACKEND ? RL_BACKEND.projectRef : null
+      });
+    }
+  };
+
   var AUTH = {
     session: null,
 
@@ -120,6 +215,8 @@
 
     clear: function () {
       this.session = null;
+      appLaunched = false;
+      stopLowIoSync();
       try { sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = null;
@@ -145,7 +242,7 @@
     },
 
     login: async function (email, password) {
-      var r = await fetch(
+      var r = await fetchWithTimeout(
         SUPA.url + '/auth/v1/token?grant_type=password',
         {
           method: 'POST',
@@ -154,7 +251,8 @@
             'apikey': SUPA.key
           },
           body: JSON.stringify({ email: email, password: password })
-        }
+        },
+        NETWORK_TIMEOUT_MS
       );
 
       var body = await r.json().catch(function () { return {}; });
@@ -176,7 +274,7 @@
     refresh: async function () {
       if (!this.refreshToken) throw new Error('Session expirée.');
 
-      var r = await fetch(
+      var r = await fetchWithTimeout(
         SUPA.url + '/auth/v1/token?grant_type=refresh_token',
         {
           method: 'POST',
@@ -185,14 +283,21 @@
             'apikey': SUPA.key
           },
           body: JSON.stringify({ refresh_token: this.refreshToken })
-        }
+        },
+        NETWORK_TIMEOUT_MS
       );
 
       var body = await r.json().catch(function () { return {}; });
 
       if (!r.ok || !body.access_token) {
-        this.clear();
-        throw new Error('Session expirée. Reconnectez-vous.');
+        if (r.status === 400 || r.status === 401 || r.status === 403) this.clear();
+        throw new Error(
+          body.msg ||
+          body.message ||
+          body.error_description ||
+          body.error ||
+          'Session expirée. Reconnectez-vous.'
+        );
       }
 
       this.save(body);
@@ -202,14 +307,19 @@
     getUser: async function () {
       if (!this.accessToken) return null;
 
-      var r = await fetch(SUPA.url + '/auth/v1/user', {
-        headers: {
-          'apikey': SUPA.key,
-          'Authorization': 'Bearer ' + this.accessToken
-        }
-      });
+      var r = await fetchWithTimeout(
+        SUPA.url + '/auth/v1/user',
+        {
+          headers: {
+            'apikey': SUPA.key,
+            'Authorization': 'Bearer ' + this.accessToken
+          }
+        },
+        10000
+      );
 
-      if (!r.ok) return null;
+      if (r.status === 401 || r.status === 403) return null;
+      if (!r.ok) throw new Error('Supabase Auth HTTP ' + r.status);
       return r.json();
     },
 
@@ -222,16 +332,30 @@
         try {
           await this.refresh();
         } catch (e) {
+          // Une panne réseau ne doit pas effacer une session encore présente.
+          if (/Impossible de joindre|délai imparti|network/i.test(String(e.message || e))) {
+            return true;
+          }
           return false;
         }
       }
 
-      var user = await this.getUser();
+      var user = null;
+      try {
+        user = await this.getUser();
+      } catch (e) {
+        console.warn('V4.3 — validation distante indisponible:', e.message || e);
+        return true;
+      }
+
       if (!user) {
         try {
           await this.refresh();
           user = await this.getUser();
         } catch (e) {
+          if (/Impossible de joindre|délai imparti|network/i.test(String(e.message || e))) {
+            return true;
+          }
           this.clear();
           return false;
         }
@@ -267,13 +391,13 @@
     logout: async function () {
       if (this.accessToken) {
         try {
-          await fetch(SUPA.url + '/auth/v1/logout', {
+          await fetchWithTimeout(SUPA.url + '/auth/v1/logout', {
             method: 'POST',
             headers: {
               'apikey': SUPA.key,
               'Authorization': 'Bearer ' + this.accessToken
             }
-          });
+          }, 8000);
         } catch (e) {}
       }
 
@@ -294,7 +418,7 @@
   window.RL_AUTH = AUTH;
 
   // ==========================================================
-  // V4.1 — Invitation / récupération : définition du mot de passe
+  // V4.3 — Invitation / récupération : définition du mot de passe
   // ==========================================================
 
   function parseAuthCallback() {
@@ -450,7 +574,7 @@
       btn.textContent = 'Enregistrement…';
 
       try {
-        var r = await fetch(SUPA.url + '/auth/v1/user', {
+        var r = await fetchWithTimeout(SUPA.url + '/auth/v1/user', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -458,7 +582,7 @@
             'Authorization': 'Bearer ' + AUTH.accessToken
           },
           body: JSON.stringify({ password: p1 })
-        });
+        }, NETWORK_TIMEOUT_MS);
 
         var body = await r.json().catch(function () { return {}; });
 
@@ -586,7 +710,7 @@
     });
 
     options.headers = headers;
-    var r = await fetch(url, options);
+    var r = await fetchWithTimeout(url, options, NETWORK_TIMEOUT_MS);
 
     if (r.status === 401 && retry && AUTH.refreshToken) {
       await AUTH.refresh();
@@ -700,6 +824,105 @@
       return 'private:' + bucket + '/' + path;
     };
   }
+
+  // ==========================================================
+  // V4.3 — Data reader : coût borné, aucune boucle périodique
+  // ==========================================================
+
+  window.fetchFromSupabase = function () {
+    if (dataRefreshPromise) return dataRefreshPromise;
+
+    telemetry.dataRefreshes += 1;
+    telemetry.lastRefreshAt = new Date().toISOString();
+
+    dataRefreshPromise = Promise.all([
+      SUPA.get(
+        'signalements',
+        'select=id,num,date,heure,lieu,type,gravite,signale_par,description,eleve,classe,famille,photos_urls,statut,created_at' +
+        '&order=date.desc&limit=500'
+      ),
+      SUPA.get(
+        'reparations',
+        'select=id,signa_id,mesure,referent,debut,duree,notes,cloture,statut,created_at' +
+        '&order=created_at.desc&limit=1000'
+      )
+    ]).then(function (results) {
+      STATE.signalements = results[0] || [];
+      STATE.reparations = results[1] || [];
+
+      if (STATE.signalements.length >= 500 || STATE.reparations.length >= 1000) {
+        console.warn(
+          'V4.3 — fenêtre de données atteinte : prévoir archivage/pagination serveur.',
+          {
+            signalements: STATE.signalements.length,
+            reparations: STATE.reparations.length
+          }
+        );
+      }
+
+      if (typeof computeNextNum === 'function') computeNextNum();
+      if (typeof saveLocalCache === 'function') saveLocalCache();
+      if (typeof refreshAll === 'function') refreshAll();
+
+      return results;
+    }).finally(function () {
+      dataRefreshPromise = null;
+    });
+
+    return dataRefreshPromise;
+  };
+
+  async function lowIoRefresh(force) {
+    if (!AUTH.accessToken) return false;
+    if (!force && document.visibilityState === 'hidden') return false;
+    if (typeof window.STATE !== 'undefined' && !STATE.online && !force) return false;
+    if (dataRefreshPromise) {
+      await dataRefreshPromise;
+      return true;
+    }
+
+    var now = Date.now();
+    if (!force && now - lastRefreshAt < MIN_AUTO_REFRESH_MS) return false;
+    lastRefreshAt = now;
+
+    try {
+      if (typeof setSyncing === 'function') setSyncing(true);
+      await window.fetchFromSupabase();
+      if (typeof setOnline === 'function') setOnline(true);
+      return true;
+    } catch (e) {
+      console.warn('V4.3 — actualisation différée:', e.message || e);
+      return false;
+    } finally {
+      if (typeof setSyncing === 'function') setSyncing(false);
+    }
+  }
+
+  function installLowIoSync() {
+    stopLowIoSync();
+
+    focusHandler = function () {
+      lowIoRefresh(false);
+    };
+
+    visibilityHandler = function () {
+      if (document.visibilityState === 'visible') lowIoRefresh(false);
+    };
+
+    window.addEventListener('focus', focusHandler);
+    document.addEventListener('visibilitychange', visibilityHandler);
+  }
+
+  // Nom conservé pour compatibilité avec le code existant.
+  // Il n'installe aucun setInterval.
+  window.subscribeRealtime = function () {
+    installLowIoSync();
+    return true;
+  };
+
+  window.rlRefreshNow = function () {
+    return lowIoRefresh(true);
+  };
 
   function markerInfo(value) {
     if (!value || typeof value !== 'string') return null;
@@ -1015,26 +1238,49 @@
   function installLogoutUi() {
     var actions = document.querySelector('.topbar-actions');
     if (!actions) return;
-    if (document.getElementById('rl-logout-btn')) return;
 
     var user = AUTH.session && AUTH.session.user;
     var email = user && user.email ? user.email : '';
 
-    var chip = document.createElement('span');
-    chip.className = 'rl-user-chip';
-    chip.id = 'rl-user-chip';
+    var chip = document.getElementById('rl-user-chip');
+    if (!chip) {
+      chip = document.createElement('span');
+      chip.className = 'rl-user-chip';
+      chip.id = 'rl-user-chip';
+      actions.appendChild(chip);
+    }
     chip.title = email;
     chip.textContent = email;
 
-    var btn = document.createElement('button');
-    btn.id = 'rl-logout-btn';
-    btn.className = 'btn btn-ghost btn-sm';
-    btn.type = 'button';
-    btn.textContent = 'Déconnexion';
-    btn.onclick = function () { AUTH.logout(); };
+    var syncBtn = document.getElementById('rl-sync-btn');
+    if (!syncBtn) {
+      syncBtn = document.createElement('button');
+      syncBtn.id = 'rl-sync-btn';
+      syncBtn.className = 'btn btn-ghost btn-sm';
+      syncBtn.type = 'button';
+      syncBtn.textContent = 'Actualiser';
+      syncBtn.title = 'Actualiser les données à la demande';
+      syncBtn.onclick = async function () {
+        syncBtn.disabled = true;
+        var ok = await lowIoRefresh(true);
+        syncBtn.disabled = false;
+        if (typeof toast === 'function') {
+          toast(ok ? 'Données actualisées.' : 'Supabase ne répond pas pour le moment.', !ok);
+        }
+      };
+      actions.appendChild(syncBtn);
+    }
 
-    actions.appendChild(chip);
-    actions.appendChild(btn);
+    var btn = document.getElementById('rl-logout-btn');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'rl-logout-btn';
+      btn.className = 'btn btn-ghost btn-sm';
+      btn.type = 'button';
+      btn.textContent = 'Déconnexion';
+      btn.onclick = function () { AUTH.logout(); };
+      actions.appendChild(btn);
+    }
   }
 
   window.probeSupa = async function () {
@@ -1042,112 +1288,111 @@
     if (!AUTH.accessToken) return 'auth-required';
 
     try {
-      var r = await secureFetch(
-        SUPA.url + '/rest/v1/signalements?select=id&limit=1',
-        { headers: SUPA.hdr() }
-      );
-
-      if (r.ok) {
-        await fetchFromSupabase();
-        return 'ok';
-      }
-
-      var body = await r.text();
-      console.warn('Supabase sécurisé HTTP', r.status, body.slice(0, 300));
-
-      if (r.status === 401) return 'session-expired';
-      if (r.status === 403) return 'rls-blocked';
-
-      if (
-        r.status === 404 ||
-        body.indexOf('42P01') !== -1 ||
-        body.indexOf('does not exist') !== -1
-      ) {
-        return 'no-tables';
-      }
-
-      return 'offline';
+      await window.fetchFromSupabase();
+      return 'ok';
     } catch (e) {
-      console.warn('Supabase sécurisé fetch error:', e);
+      var msg = String(e && e.message ? e.message : e);
+      console.warn('V4.3 — lecture Supabase impossible:', msg.slice(0, 400));
+
+      if (/\b401\b/.test(msg)) return 'session-expired';
+      if (/\b403\b/.test(msg)) return 'rls-blocked';
+      if (/\b404\b|42P01|does not exist/i.test(msg)) return 'no-tables';
       return 'offline';
     }
   };
 
   async function launchAuthenticatedApp() {
-    installSecureSupabaseClient();
-
-    if (typeof setLoading === 'function') {
-      setLoading('Connexion sécurisée à Supabase…');
-    }
-
-    loadLocalCache();
-
-    if (typeof updateAppConfig === 'function') updateAppConfig();
-
-    var main = document.getElementById('main-app');
-    if (main) main.style.display = 'flex';
-
-    if (typeof refreshAll === 'function') refreshAll();
-
-    var status = await probeSupa();
-
-    if (typeof setLoading === 'function') setLoading(false);
-
-    if (status === 'ok') {
-      if (typeof setOnline === 'function') setOnline(true);
-      if (typeof flushQueue === 'function') flushQueue();
-      if (typeof subscribeRealtime === 'function') subscribeRealtime();
+    if (appLaunched) {
       installLogoutUi();
+      return true;
+    }
+    if (appLaunchPromise) return appLaunchPromise;
 
-      var banner = document.getElementById('supa-error-banner');
-      if (banner) banner.remove();
+    appLaunchPromise = (async function () {
+      installSecureSupabaseClient();
 
-      if (typeof toast === 'function') {
-        toast('✓ Connexion sécurisée — RLS actif.');
+      if (typeof setLoading === 'function') {
+        setLoading('Connexion sécurisée à Supabase…');
       }
-      return;
-    }
 
-    if (typeof setOnline === 'function') setOnline(false);
+      loadLocalCache();
 
-    if (status === 'session-expired' || status === 'auth-required') {
-      AUTH.clear();
-      showAuthScreen('Session expirée. Reconnectez-vous.');
-      return;
-    }
+      if (typeof updateAppConfig === 'function') updateAppConfig();
 
-    if (status === 'rls-blocked') {
+      var main = document.getElementById('main-app');
+      if (main) main.style.display = 'flex';
+
+      if (typeof refreshAll === 'function') refreshAll();
+
+      var status = await probeSupa();
+
+      if (typeof setLoading === 'function') setLoading(false);
+
+      if (status === 'ok') {
+        if (typeof setOnline === 'function') setOnline(true);
+        if (typeof flushQueue === 'function') flushQueue();
+        if (typeof subscribeRealtime === 'function') subscribeRealtime();
+        installLogoutUi();
+        appLaunched = true;
+
+        var banner = document.getElementById('supa-error-banner');
+        if (banner) banner.remove();
+
+        if (typeof toast === 'function') {
+          toast('✓ V4.3 — connexion sécurisée, synchronisation économe active.');
+        }
+        return true;
+      }
+
+      appLaunched = false;
+
+      if (typeof setOnline === 'function') setOnline(false);
+
+      if (status === 'session-expired' || status === 'auth-required') {
+        AUTH.clear();
+        showAuthScreen('Session expirée. Reconnectez-vous.');
+        return false;
+      }
+
+      if (status === 'rls-blocked') {
+        if (typeof showSupaError === 'function') {
+          showSupaError(
+            'Accès refusé par Supabase. Vérifiez les policies RLS. Ne désactivez jamais RLS.'
+          );
+        }
+        return false;
+      }
+
+      if (status === 'no-tables') {
+        if (typeof showSupaError === 'function') {
+          showSupaError(
+            'Tables introuvables. Vérifiez la migration supabase_secure_v4.sql.'
+          );
+        }
+        return false;
+      }
+
+      if (status === 'file-local') {
+        if (typeof showSupaError === 'function') {
+          showSupaError(
+            'Ouvrez l’application via GitHub Pages ou un serveur HTTP(S), pas avec file://.'
+          );
+        }
+        return false;
+      }
+
       if (typeof showSupaError === 'function') {
         showSupaError(
-          'Accès refusé par Supabase. Exécutez supabase_secure_v4.sql et vérifiez les policies. ' +
-          'Ne désactivez pas RLS.'
+          'Supabase est momentanément indisponible. La session est conservée et aucune donnée sensible n’est persistée localement.'
         );
       }
-      return;
-    }
+      return false;
+    })();
 
-    if (status === 'no-tables') {
-      if (typeof showSupaError === 'function') {
-        showSupaError(
-          'Tables introuvables. Exécutez supabase_secure_v4.sql dans Supabase SQL Editor, puis rechargez.'
-        );
-      }
-      return;
-    }
-
-    if (status === 'file-local') {
-      if (typeof showSupaError === 'function') {
-        showSupaError(
-          'Ouvrez l’application via GitHub Pages ou un serveur HTTP(S), pas avec file://.'
-        );
-      }
-      return;
-    }
-
-    if (typeof showSupaError === 'function') {
-      showSupaError(
-        'Connexion Supabase indisponible. Les données sensibles ne sont pas enregistrées localement.'
-      );
+    try {
+      return await appLaunchPromise;
+    } finally {
+      appLaunchPromise = null;
     }
   }
 
@@ -1187,7 +1432,7 @@
       return;
     }
 
-    // V4.1 : une invitation Supabase arrive avec une session temporaire
+    // V4.3 : une invitation Supabase arrive avec une session temporaire
     // dans le fragment #... de l'URL. Elle doit être consommée AVANT
     // l'affichage du formulaire de connexion.
     var callbackHandled = await consumeAuthCallback();
