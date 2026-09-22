@@ -148,7 +148,8 @@ Les fichiers structurants sont désormais :
 `config.js`  
 `security-v4.js`  
 `supabase_secure_v4.sql`  
-`AUDIT-V4.3.md`
+`AUDIT-V4.3.md`  
+`diagnostic-v4.3.sql`
 
 ---
 
