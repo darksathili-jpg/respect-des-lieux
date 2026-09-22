@@ -36,6 +36,7 @@ alter table public.authorized_users
     check (char_length(email) <= 320);
 
 alter table public.authorized_users enable row level security;
+revoke all on table public.authorized_users from public;
 revoke all on table public.authorized_users from anon;
 revoke all on table public.authorized_users from authenticated;
 grant select on table public.authorized_users to authenticated;
@@ -220,6 +221,8 @@ end $$;
 alter table public.signalements enable row level security;
 alter table public.reparations enable row level security;
 
+revoke all on table public.signalements from public;
+revoke all on table public.reparations from public;
 revoke all on table public.signalements from anon;
 revoke all on table public.reparations from anon;
 revoke all on table public.signalements from authenticated;
@@ -276,19 +279,18 @@ to authenticated
 using ((select private.is_authorized_user()))
 with check ((select private.is_authorized_user()));
 
-create index if not exists signalements_created_at_idx
-  on public.signalements (created_at desc);
+drop index if exists public.signalements_created_at_idx;
+drop index if exists public.signalements_statut_idx;
+drop index if exists public.reparations_statut_idx;
+
 create index if not exists signalements_date_idx
   on public.signalements (date desc);
-create index if not exists signalements_statut_idx
-  on public.signalements (statut);
 
 create index if not exists reparations_created_at_idx
   on public.reparations (created_at desc);
+
 create index if not exists reparations_signa_id_idx
   on public.reparations (signa_id);
-create index if not exists reparations_statut_idx
-  on public.reparations (statut);
 
 insert into storage.buckets (
   id,
