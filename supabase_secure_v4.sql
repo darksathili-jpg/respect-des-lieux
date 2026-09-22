@@ -1,7 +1,7 @@
 -- ============================================================
--- RESPECT DES LIEUX — SUPABASE SECURE V4.2
+-- RESPECT DES LIEUX — SUPABASE SECURE V4.3
 -- ============================================================
--- Reproduit l'architecture du projet respect-des-lieux-v2.
+-- Reproduit l'architecture du projet respect-des-lieux-v2 avec les garde-fous V4.3.
 -- RLS reste ACTIVE. Aucun accès aux données n'est accordé au rôle anon.
 -- Les comptes Auth ne sont pas suffisants : leur e-mail doit aussi figurer
 -- dans public.authorized_users.
@@ -76,6 +76,20 @@ create table if not exists public.signalements (
   created_at timestamptz not null default now()
 );
 
+do $
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'signalements_max_two_photos'
+      and conrelid = 'public.signalements'::regclass
+  ) then
+    alter table public.signalements
+      add constraint signalements_max_two_photos
+      check (coalesce(cardinality(photos_urls), 0) <= 2);
+  end if;
+end $;
+
 create table if not exists public.reparations (
   id bigint primary key,
   signa_id bigint,
@@ -88,6 +102,22 @@ create table if not exists public.reparations (
   statut text default 'En cours',
   created_at timestamptz not null default now()
 );
+
+do $
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'reparations_signa_id_fkey'
+      and conrelid = 'public.reparations'::regclass
+  ) then
+    alter table public.reparations
+      add constraint reparations_signa_id_fkey
+      foreign key (signa_id)
+      references public.signalements(id)
+      on delete cascade;
+  end if;
+end $;
 
 alter table public.signalements enable row level security;
 alter table public.reparations enable row level security;
@@ -127,9 +157,21 @@ create index if not exists reparations_signa_id_idx
 create index if not exists reparations_statut_idx
   on public.reparations (statut);
 
-insert into storage.buckets (id, name, public)
-values ('rl-photos', 'rl-photos', false)
-on conflict (id) do update set public = false;
+insert into storage.buckets (
+  id, name, public, file_size_limit, allowed_mime_types
+)
+values (
+  'rl-photos',
+  'rl-photos',
+  false,
+  3145728,
+  array['image/jpeg']::text[]
+)
+on conflict (id) do update
+set
+  public = false,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "rl_photos_select" on storage.objects;
 drop policy if exists "rl_photos_insert" on storage.objects;
