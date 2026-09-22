@@ -80,7 +80,7 @@ L’interface permet de retrouver les signalements enregistrés et de suivre leu
 
 ---
 
-# 🔐 Sécurité — évolution V4 / V4.1
+# 🔐 Sécurité — évolution V4 / V4.1 / V4.2
 
 La sécurité de l’application a fait l’objet d’une refonte importante.
 
@@ -119,6 +119,30 @@ Accès à Respect des Lieux
 ```
 
 La **V4.1** détecte automatiquement les liens d’invitation Supabase et affiche un écran permettant à l’utilisateur de définir son mot de passe.
+
+## V4.2 — réduction de la charge Supabase
+
+La V4.2 corrige un problème de consommation inutile des ressources PostgreSQL :
+
+- suppression du polling automatique toutes les 30 secondes ;
+- suppression des rafraîchissements concurrents ;
+- actualisation automatique uniquement au retour sur l’onglet, avec une temporisation minimale de 2 minutes ;
+- bouton **Actualiser** pour déclencher volontairement une synchronisation ;
+- délai maximal sur les appels réseau afin d’éviter les attentes indéfinies ;
+- messages explicites lorsque Supabase est indisponible ou saturé ;
+- requêtes REST avec une liste explicite de colonnes ;
+- ajout d’un script SQL sécurisé avec RLS actif et index adaptés ;
+- ajout d’un diagnostic en lecture seule pour contrôler les scans, les index, la taille des lignes et d’éventuelles anciennes photos Base64.
+
+Les fichiers concernés sont :
+
+`v4-2-hotfix.js`  
+`supabase_secure_v4.sql`  
+`diagnostic-v4.2.sql`
+
+> [!IMPORTANT]
+> La V4.2 ne désactive jamais RLS. Le script SQL ne doit être exécuté que lorsque le projet Supabase répond normalement et après vérification du diagnostic.
+
 
 ---
 
