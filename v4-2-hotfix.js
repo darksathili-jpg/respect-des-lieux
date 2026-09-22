@@ -27,6 +27,26 @@
   if (window.__RL_V42_HOTFIX__) return;
   window.__RL_V42_HOTFIX__ = true;
 
+  var V42_BACKEND = {
+    url: 'https://odrussbhwyvyudmybjxy.supabase.co',
+    key: 'sb_publishable_vKsbN6d8Thyaa46ylDxGHA_LpiDEreR'
+  };
+
+  // Bascule automatique vers le nouveau projet Supabase V2.
+  // La clé publishable est publique par conception ; aucune clé secrète n'est embarquée.
+  try {
+    var saved = JSON.parse(localStorage.getItem('rl3-cfg') || '{}');
+    saved.supaUrl = V42_BACKEND.url;
+    saved.supaKey = V42_BACKEND.key;
+    saved.config = saved.config || {};
+    localStorage.setItem('rl3-cfg', JSON.stringify(saved));
+  } catch (e) {}
+
+  if (window.SUPA) {
+    SUPA.url = V42_BACKEND.url;
+    SUPA.key = V42_BACKEND.key;
+  }
+
   var MIN_AUTO_REFRESH_MS = 120000;
   var NETWORK_TIMEOUT_MS = 12000;
   var state = {
