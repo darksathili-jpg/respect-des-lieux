@@ -407,7 +407,17 @@ Cela permet aux invitations Supabase de revenir correctement vers l’applicatio
 
 ## 5. Ajouter un utilisateur
 
-Depuis :
+La V4.3 utilise une **double autorisation**. Avant d'inviter un compte, son adresse doit être placée dans la liste blanche.
+
+Dans **Table Editor → authorized_users**, ajouter l'adresse avec `active = true`, ou utiliser :
+
+```sql
+insert into public.authorized_users (email, active)
+values ('prenom.nom@ac-lille.fr', true)
+on conflict (email) do update set active = true;
+```
+
+Ensuite seulement :
 
 ```text
 Authentication
@@ -416,16 +426,18 @@ Authentication
 → Send invitation
 ```
 
-l’administrateur invite une adresse e-mail autorisée.
+Le trigger `rl_enforce_authorized_auth_user` refuse la création d'un compte Auth dont l'adresse n'est pas dans cette liste.
 
-Avec la V4.1 :
+Parcours utilisateur :
 
 1. l’utilisateur reçoit l’invitation ;
 2. il clique sur le lien ;
 3. l’application reconnaît le lien Supabase ;
 4. elle affiche **Créer votre mot de passe** ;
-5. l’utilisateur choisit son mot de passe ;
+5. elle exige un mot de passe unique d'au moins **12 caractères** ;
 6. l’application s’ouvre avec une session authentifiée.
+
+Pour retirer un accès sans supprimer l'historique, passer simplement `active` à `false` dans `authorized_users`. Les policies RLS refusent alors immédiatement les données à ce compte.
 
 ---
 
