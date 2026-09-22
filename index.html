@@ -1173,111 +1173,219 @@ function toggleAutre(type, val) {
 /* ═══════════════════════════════════════════════════════════════
    SAUVEGARDE
 ═══════════════════════════════════════════════════════════════ */
-async function saveSig() {
-  var date  = document.getElementById('sig-date').value;
-  var lieuSel = document.getElementById('sig-lieu').value;
-  if (!date)    { toast('La date est obligatoire.', true); return; }
-  if (!lieuSel) { toast('Le lieu est obligatoire.', true); return; }
-  var lieu = lieuSel==='Autre' ? (document.getElementById('sig-lieu-autre').value.trim()||'Autre') : lieuSel;
-  var typeSel = document.getElementById('sig-type').value;
-  var type = typeSel==='Autre' ? (document.getElementById('sig-type-autre').value.trim()||'Autre') : typeSel;
-  var btn = document.getElementById('btn-save-sig');
-  btn.disabled = true; btn.textContent = 'Enregistrement…';
-  var id = Date.now();
-  var num = genNum();
-  var photosUrls = [];
-  if (STATE.pendingPhotos.length) {
-    setSyncing(true);
-    photosUrls = await uploadPendingPhotos(id);
-    setSyncing(false);
+function requireOnlineWrite() {
+  if (!STATE.online) {
+    toast(
+      'Connexion Supabase requise pour enregistrer. Aucune modification n’a été conservée localement.',
+      true
+    );
+    return false;
   }
+  return true;
+}
+
+function newRecordId() {
+  // Millisecondes + suffixe aléatoire : réduit fortement le risque de collision entre postes.
+  return Date.now() * 1000 + Math.floor(Math.random() * 1000);
+}
+
+async function saveSig() {
+  var date = document.getElementById('sig-date').value;
+  var lieuSel = document.getElementById('sig-lieu').value;
+
+  if (!date) { toast('La date est obligatoire.', true); return; }
+  if (!lieuSel) { toast('Le lieu est obligatoire.', true); return; }
+  if (!requireOnlineWrite()) return;
+
+  var lieu = lieuSel === 'Autre'
+    ? (document.getElementById('sig-lieu-autre').value.trim() || 'Autre')
+    : lieuSel;
+
+  var typeSel = document.getElementById('sig-type').value;
+  var type = typeSel === 'Autre'
+    ? (document.getElementById('sig-type-autre').value.trim() || 'Autre')
+    : typeSel;
+
+  var btn = document.getElementById('btn-save-sig');
+  btn.disabled = true;
+  btn.textContent = 'Enregistrement…';
+
+  var id = newRecordId();
+  var num = genNum();
+
   var sig = {
-    id: id, num: num, date: date,
+    id: id,
+    num: num,
+    date: date,
     heure: document.getElementById('sig-heure').value,
-    lieu: lieu, type: type,
+    lieu: lieu,
+    type: type,
     gravite: document.getElementById('sig-gravite').value,
     signale_par: document.getElementById('sig-par').value,
     description: document.getElementById('sig-desc').value,
     eleve: document.getElementById('sig-eleve').value,
     classe: document.getElementById('sig-classe').value,
     famille: document.getElementById('sig-famille').value,
-    photos_urls: photosUrls,
+    photos_urls: [],
     statut: 'Ouvert',
     created_at: new Date().toISOString()
   };
-  STATE.signalements.unshift(sig);
-  saveLocalCache();
-  closeModal('signalement');
-  refreshAll();
-  toast('Signalement ' + num + ' enregistré.');
-  btn.disabled = false; btn.textContent = 'Enregistrer';
-  resetPhotoState();
-  if (STATE.online) {
-    SUPA.post('signalements', sig).catch(function(){ enqueue({type:'sig', data:sig}); });
-  } else {
-    enqueue({type:'sig', data:sig});
+
+  try {
+    // V4.3 : le serveur confirme d'abord la création.
+    await SUPA.post('signalements', sig);
+
+    // Les photos ne sont envoyées qu'après existence du signalement.
+    if (STATE.pendingPhotos.length) {
+      setSyncing(true);
+      var photosUrls = await uploadPendingPhotos(id);
+      setSyncing(false);
+
+      if (photosUrls.length) {
+        await SUPA.patch('signalements', id, { photos_urls: photosUrls });
+        sig.photos_urls = photosUrls;
+      }
+    }
+
+    STATE.signalements.unshift(sig);
+    computeNextNum();
+    closeModal('signalement');
+    refreshAll();
+    resetPhotoState();
+    toast('Signalement ' + num + ' enregistré sur Supabase.');
+  } catch (err) {
+    setSyncing(false);
+    computeNextNum();
+    console.error('V4.3 — échec enregistrement signalement:', err);
+    toast(
+      'Enregistrement impossible : aucune donnée n’a été validée localement. ' +
+      (err && err.message ? err.message : ''),
+      true
+    );
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Enregistrer';
   }
 }
 
-function saveRep() {
+async function saveRep() {
   var mesure = document.getElementById('rep-mesure').value;
-  var ref    = document.getElementById('rep-ref').value.trim();
-  var debut  = document.getElementById('rep-debut').value;
+  var ref = document.getElementById('rep-ref').value.trim();
+  var debut = document.getElementById('rep-debut').value;
+
   if (!mesure) { toast('La mesure est obligatoire.', true); return; }
-  if (!ref)    { toast('L\'adulte référent est obligatoire.', true); return; }
-  if (!debut)  { toast('La date de début est obligatoire.', true); return; }
+  if (!ref) { toast('L\'adulte référent est obligatoire.', true); return; }
+  if (!debut) { toast('La date de début est obligatoire.', true); return; }
+  if (!requireOnlineWrite()) return;
+
   var r = {
-    id: Date.now(), signa_id: Number(STATE.currentRepSigId),
-    mesure: mesure, referent: ref, debut: debut,
+    id: newRecordId(),
+    signa_id: Number(STATE.currentRepSigId),
+    mesure: mesure,
+    referent: ref,
+    debut: debut,
     duree: document.getElementById('rep-duree').value,
     notes: document.getElementById('rep-notes').value,
     cloture: document.getElementById('rep-cloture').value,
-    statut: 'En cours', created_at: new Date().toISOString()
+    statut: 'En cours',
+    created_at: new Date().toISOString()
   };
-  STATE.reparations.push(r);
-  var s = STATE.signalements.find(function(x){ return Number(x.id)===Number(STATE.currentRepSigId); });
-  if (s && s.statut==='Ouvert') {
-    s.statut = 'En réparation';
-    if (STATE.online) SUPA.patch('signalements', s.id, {statut:'En réparation'}).catch(function(){ enqueue({type:'patch-sig',id:s.id,data:{statut:'En réparation'}}); });
-    else enqueue({type:'patch-sig',id:s.id,data:{statut:'En réparation'}});
+
+  try {
+    await SUPA.post('reparations', r);
+
+    var sig = STATE.signalements.find(function (x) {
+      return Number(x.id) === Number(STATE.currentRepSigId);
+    });
+
+    if (sig && sig.statut === 'Ouvert') {
+      await SUPA.patch('signalements', sig.id, { statut: 'En réparation' });
+      sig.statut = 'En réparation';
+    }
+
+    STATE.reparations.push(r);
+    closeModal('reparation');
+    refreshAll();
+    toast('Mesure de réparation enregistrée sur Supabase.');
+  } catch (err) {
+    console.error('V4.3 — échec enregistrement réparation:', err);
+    // On recharge : si le POST a réussi mais que le PATCH suivant a échoué,
+    // l'interface se réaligne sur l'état réellement présent côté serveur.
+    if (typeof rlRefreshNow === 'function') await rlRefreshNow();
+    toast(
+      'Enregistrement incomplet ou impossible. Les données ont été relues depuis Supabase.',
+      true
+    );
   }
-  saveLocalCache();
-  closeModal('reparation'); refreshAll();
-  toast('Mesure de réparation enregistrée.');
-  if (STATE.online) SUPA.post('reparations', r).catch(function(){ enqueue({type:'rep',data:r}); });
-  else enqueue({type:'rep',data:r});
 }
 
-function clore(id) {
-  var s = STATE.signalements.find(function(x){ return Number(x.id)===Number(id); });
-  if (!s) return;
-  s.statut = 'Clos'; saveLocalCache(); refreshAll();
-  toast('Dossier '+(s.num||'')+' clos.');
-  if (STATE.online) SUPA.patch('signalements', id, {statut:'Clos'}).catch(function(){ enqueue({type:'patch-sig',id:id,data:{statut:'Clos'}}); });
-  else enqueue({type:'patch-sig',id:id,data:{statut:'Clos'}});
-}
-function cloreRep(id) {
-  var r = STATE.reparations.find(function(x){ return Number(x.id)===Number(id); });
-  if (!r) return;
-  r.statut = 'Terminée'; saveLocalCache(); renderReps(); renderDashboard();
-  toast('Mesure terminée.');
-  if (STATE.online) SUPA.patch('reparations', id, {statut:'Terminée'}).catch(function(){ enqueue({type:'patch-rep',id:id,data:{statut:'Terminée'}}); });
-  else enqueue({type:'patch-rep',id:id,data:{statut:'Terminée'}});
-}
-function saveCloture(repId) {
-  var r = STATE.reparations.find(function(x){ return Number(x.id)===Number(repId); });
-  if (!r) return;
-  var fields = document.querySelectorAll('.fiche-editable');
-  var notes='', cloture='';
-  fields.forEach(function(f){
-    if (f.dataset.field==='notes')   notes   = f.innerText.trim();
-    if (f.dataset.field==='cloture') cloture = f.innerText.trim();
+async function clore(id) {
+  if (!requireOnlineWrite()) return;
+
+  var sig = STATE.signalements.find(function (x) {
+    return Number(x.id) === Number(id);
   });
-  r.notes=notes; r.cloture=cloture;
-  saveLocalCache(); toast('Entretien de clôture enregistré.');
-  var patch = {notes:notes, cloture:cloture};
-  if (STATE.online) SUPA.patch('reparations', repId, patch).catch(function(){ enqueue({type:'patch-rep',id:repId,data:patch}); });
-  else enqueue({type:'patch-rep',id:repId,data:patch});
+  if (!sig) return;
+
+  try {
+    await SUPA.patch('signalements', id, { statut: 'Clos' });
+    sig.statut = 'Clos';
+    refreshAll();
+    toast('Dossier ' + (sig.num || '') + ' clos.');
+  } catch (err) {
+    console.error('V4.3 — échec clôture signalement:', err);
+    toast('Clôture impossible. Aucune modification locale conservée.', true);
+  }
+}
+
+async function cloreRep(id) {
+  if (!requireOnlineWrite()) return;
+
+  var rep = STATE.reparations.find(function (x) {
+    return Number(x.id) === Number(id);
+  });
+  if (!rep) return;
+
+  try {
+    await SUPA.patch('reparations', id, { statut: 'Terminée' });
+    rep.statut = 'Terminée';
+    renderReps();
+    renderDashboard();
+    toast('Mesure terminée.');
+  } catch (err) {
+    console.error('V4.3 — échec clôture réparation:', err);
+    toast('Modification impossible. Aucune modification locale conservée.', true);
+  }
+}
+
+async function saveCloture(repId) {
+  if (!requireOnlineWrite()) return;
+
+  var rep = STATE.reparations.find(function (x) {
+    return Number(x.id) === Number(repId);
+  });
+  if (!rep) return;
+
+  var fields = document.querySelectorAll('.fiche-editable');
+  var notes = '';
+  var cloture = '';
+
+  fields.forEach(function (field) {
+    if (field.dataset.field === 'notes') notes = field.innerText.trim();
+    if (field.dataset.field === 'cloture') cloture = field.innerText.trim();
+  });
+
+  var patch = { notes: notes, cloture: cloture };
+
+  try {
+    await SUPA.patch('reparations', repId, patch);
+    rep.notes = notes;
+    rep.cloture = cloture;
+    toast('Entretien de clôture enregistré sur Supabase.');
+  } catch (err) {
+    console.error('V4.3 — échec entretien de clôture:', err);
+    toast('Enregistrement impossible. Aucune modification locale conservée.', true);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
