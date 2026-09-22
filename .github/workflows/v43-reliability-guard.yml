@@ -1,0 +1,23 @@
+name: V4.3 Reliability Guard
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  reliability-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Runtime
+        run: node --version
+
+      - name: V4.3 regression guard
+        run: node tests/v43-guard.mjs
