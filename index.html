@@ -700,7 +700,7 @@ td{padding:9px 12px;vertical-align:middle}
     </div>
     <div class="mo-ft">
       <button class="btn btn-ghost" onclick="closeModal('reparation')">Annuler</button>
-      <button class="btn btn-primary" onclick="saveRep()">Enregistrer la mesure</button>
+      <button class="btn btn-primary" id="btn-save-rep" onclick="saveRep()">Enregistrer la mesure</button>
     </div>
   </div>
 </div>
@@ -756,7 +756,6 @@ var STATE = {
   config: { etab: 'Lycée Antoine Watteau', ville: 'Valenciennes', cpe: '' },
   online: false,
   queue: [],           // opérations en attente (offline)
-  nextNum: 1,
   sigSort: { key: 'date', asc: false },
   repSort: { key: 'debut', asc: false },
   sigPage: 1, repPage: 1,
@@ -938,24 +937,11 @@ function loadLocalCache() {
   STATE.signalements = [];
   STATE.reparations = [];
   STATE.queue = [];
-  computeNextNum();
 }
 function saveLocalCache() {
   clearSensitiveLocalCache();
 }
-function computeNextNum() {
-  var yr = new Date().getFullYear(), max = 0;
-  STATE.signalements.forEach(function(s){
-    if (s.num && s.num.startsWith(yr+'-')) {
-      var n = parseInt(s.num.split('-')[1])||0;
-      if (n > max) max = n;
-    }
-  });
-  STATE.nextNum = max + 1;
-}
-function genNum() {
-  return new Date().getFullYear() + '-' + String(STATE.nextNum++).padStart(4,'0');
-}
+
 
 /* ═══════════════════════════════════════════════════════════════
    START APP
@@ -1171,11 +1157,6 @@ function requireOnlineWrite() {
   return true;
 }
 
-function newRecordId() {
-  // Millisecondes + suffixe aléatoire : réduit fortement le risque de collision entre postes.
-  return Date.now() * 1000 + Math.floor(Math.random() * 1000);
-}
-
 async function saveSig() {
   var date = document.getElementById('sig-date').value;
   var lieuSel = document.getElementById('sig-lieu').value;
@@ -1197,12 +1178,9 @@ async function saveSig() {
   btn.disabled = true;
   btn.textContent = 'Enregistrement…';
 
-  var id = newRecordId();
-  var num = genNum();
-
-  var sig = {
-    id: id,
-    num: num,
+  // V4.3 : id, numéro de dossier et created_at sont générés côté PostgreSQL.
+  // Le navigateur ne peut donc plus créer de collision entre deux postes.
+  var draft = {
     date: date,
     heure: document.getElementById('sig-heure').value,
     lieu: lieu,
@@ -1214,38 +1192,57 @@ async function saveSig() {
     classe: document.getElementById('sig-classe').value,
     famille: document.getElementById('sig-famille').value,
     photos_urls: [],
-    statut: 'Ouvert',
-    created_at: new Date().toISOString()
+    statut: 'Ouvert'
   };
 
   try {
-    // V4.3 : le serveur confirme d'abord la création.
-    await SUPA.post('signalements', sig);
+    var createdRows = await SUPA.post('signalements', draft);
+    var saved = createdRows && createdRows[0] ? createdRows[0] : null;
 
-    // Les photos ne sont envoyées qu'après existence du signalement.
+    if (!saved || saved.id === undefined || !saved.num) {
+      throw new Error('Supabase n’a pas renvoyé le signalement créé.');
+    }
+
+    // Une photo est un complément : un échec Storage ne doit pas faire croire
+    // que le signalement principal a été perdu.
     if (STATE.pendingPhotos.length) {
-      setSyncing(true);
-      var photosUrls = await uploadPendingPhotos(id);
-      setSyncing(false);
+      try {
+        setSyncing(true);
+        var photosUrls = await uploadPendingPhotos(saved.id);
 
-      if (photosUrls.length) {
-        await SUPA.patch('signalements', id, { photos_urls: photosUrls });
-        sig.photos_urls = photosUrls;
+        if (photosUrls.length) {
+          var patchedRows = await SUPA.patch(
+            'signalements',
+            saved.id,
+            { photos_urls: photosUrls }
+          );
+          if (patchedRows && patchedRows[0]) {
+            saved = patchedRows[0];
+          } else {
+            saved.photos_urls = photosUrls;
+          }
+        }
+      } catch (photoErr) {
+        console.warn('V4.3 — photos non rattachées:', photoErr);
+        toast(
+          'Le signalement est enregistré, mais une ou plusieurs photos n’ont pas pu être rattachées.',
+          true
+        );
+      } finally {
+        setSyncing(false);
       }
     }
 
-    STATE.signalements.unshift(sig);
-    computeNextNum();
+    STATE.signalements.unshift(saved);
     closeModal('signalement');
     refreshAll();
     resetPhotoState();
-    toast('Signalement ' + num + ' enregistré sur Supabase.');
+    toast('Signalement ' + saved.num + ' enregistré sur Supabase.');
   } catch (err) {
     setSyncing(false);
-    computeNextNum();
     console.error('V4.3 — échec enregistrement signalement:', err);
     toast(
-      'Enregistrement impossible : aucune donnée n’a été validée localement. ' +
+      'Enregistrement impossible : aucune confirmation Supabase n’a été reçue. ' +
       (err && err.message ? err.message : ''),
       true
     );
@@ -1265,8 +1262,14 @@ async function saveRep() {
   if (!debut) { toast('La date de début est obligatoire.', true); return; }
   if (!requireOnlineWrite()) return;
 
-  var r = {
-    id: newRecordId(),
+  var btn = document.getElementById('btn-save-rep');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Enregistrement…';
+  }
+
+  // V4.3 : l'identifiant est généré côté PostgreSQL.
+  var draft = {
     signa_id: Number(STATE.currentRepSigId),
     mesure: mesure,
     referent: ref,
@@ -1274,35 +1277,54 @@ async function saveRep() {
     duree: document.getElementById('rep-duree').value,
     notes: document.getElementById('rep-notes').value,
     cloture: document.getElementById('rep-cloture').value,
-    statut: 'En cours',
-    created_at: new Date().toISOString()
+    statut: 'En cours'
   };
 
   try {
-    await SUPA.post('reparations', r);
+    var createdRows = await SUPA.post('reparations', draft);
+    var saved = createdRows && createdRows[0] ? createdRows[0] : null;
+
+    if (!saved || saved.id === undefined) {
+      throw new Error('Supabase n’a pas renvoyé la mesure créée.');
+    }
 
     var sig = STATE.signalements.find(function (x) {
       return Number(x.id) === Number(STATE.currentRepSigId);
     });
 
+    STATE.reparations.push(saved);
+
     if (sig && sig.statut === 'Ouvert') {
-      await SUPA.patch('signalements', sig.id, { statut: 'En réparation' });
-      sig.statut = 'En réparation';
+      try {
+        var patched = await SUPA.patch(
+          'signalements',
+          sig.id,
+          { statut: 'En réparation' }
+        );
+        sig.statut = patched && patched[0]
+          ? patched[0].statut
+          : 'En réparation';
+      } catch (patchErr) {
+        console.warn('V4.3 — statut du signalement non mis à jour:', patchErr);
+        if (typeof rlRefreshNow === 'function') await rlRefreshNow();
+      }
     }
 
-    STATE.reparations.push(r);
     closeModal('reparation');
     refreshAll();
     toast('Mesure de réparation enregistrée sur Supabase.');
   } catch (err) {
     console.error('V4.3 — échec enregistrement réparation:', err);
-    // On recharge : si le POST a réussi mais que le PATCH suivant a échoué,
-    // l'interface se réaligne sur l'état réellement présent côté serveur.
     if (typeof rlRefreshNow === 'function') await rlRefreshNow();
     toast(
-      'Enregistrement incomplet ou impossible. Les données ont été relues depuis Supabase.',
+      'Enregistrement impossible ou incomplet. L’état affiché a été réaligné avec Supabase.',
       true
     );
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Enregistrer la mesure';
+    }
   }
 }
 
