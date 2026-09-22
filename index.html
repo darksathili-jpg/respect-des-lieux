@@ -990,36 +990,23 @@ function subscribeRealtime() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   OFFLINE QUEUE
+   ÉCRITURES HORS-LIGNE
 ═══════════════════════════════════════════════════════════════ */
-function enqueue(op) {
-  STATE.queue.push(op);
-  saveLocalCache();
-  updateQueueBadge();
+/*
+ * V4.3 : aucune écriture métier n'est mise en file d'attente localement.
+ * L'application exige une confirmation Supabase avant de modifier l'UI.
+ * Cela évite de présenter comme "enregistrée" une donnée qui ne l'est pas.
+ */
+function enqueue() {
+  toast('Écriture hors-ligne désactivée : reconnectez-vous puis recommencez.', true);
 }
 function flushQueue() {
-  if (!STATE.queue.length) return;
-  var ops = STATE.queue.slice();
   STATE.queue = [];
-  saveLocalCache();
   updateQueueBadge();
-  var chain = Promise.resolve();
-  ops.forEach(function(op){
-    chain = chain.then(function(){
-      if (op.type === 'sig')  return SUPA.post('signalements', op.data).catch(function(){enqueue(op);});
-      if (op.type === 'rep')  return SUPA.post('reparations', op.data).catch(function(){enqueue(op);});
-      if (op.type === 'patch-sig') return SUPA.patch('signalements', op.id, op.data).catch(function(){enqueue(op);});
-      if (op.type === 'patch-rep') return SUPA.patch('reparations', op.id, op.data).catch(function(){enqueue(op);});
-    });
-  });
-  chain.then(function(){
-    if (ops.length) toast(ops.length + ' opération(s) synchronisée(s).');
-  });
 }
 function updateQueueBadge() {
   var b = document.getElementById('queue-badge');
-  if (STATE.queue.length) { b.textContent = STATE.queue.length; b.style.display='inline'; }
-  else b.style.display = 'none';
+  if (b) b.style.display = 'none';
 }
 
 /* ═══════════════════════════════════════════════════════════════
