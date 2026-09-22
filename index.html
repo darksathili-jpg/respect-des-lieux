@@ -593,10 +593,9 @@ td{padding:9px 12px;vertical-align:middle}
         <p>Cet outil traite des données personnelles de mineurs. Elles sont stockées dans votre projet Supabase (hébergé EU par défaut). Avant utilisation : déclarez le traitement au DPD académique, informez les familles. Ne mentionnez que des faits objectifs — aucune appréciation comportementale.</p>
       </div>
       <div style="text-align:center;padding:12px 0">
-        <button class="btn btn-ghost btn-sm" onclick="reconfig()" style="color:var(--red)">Reconfigurer Supabase</button>
-        <button class="btn btn-ghost btn-sm" onclick="exportCSV()" style="margin-left:8px">↓ Export CSV</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportCSV()">↓ Export CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="exportJSON()" style="margin-left:4px">↓ Export JSON</button>
-        <button class="btn btn-red btn-sm" onclick="purgeData()" style="margin-left:8px">Purger les données</button>
+        <span style="display:inline-block;margin-left:8px;font-size:11px;color:var(--ink-muted)">Backend verrouillé — V4.3</span>
       </div>
     </section>
 
@@ -729,50 +728,23 @@ td{padding:9px 12px;vertical-align:middle}
    SUPABASE CLIENT (vanilla fetch — pas de SDK)
 ═══════════════════════════════════════════════════════════════ */
 var SUPA = {
-  url: '', key: '',
-  hdr: function() {
+  url: '',
+  key: '',
+  hdr: function () {
     return {
       'Content-Type': 'application/json',
-      'apikey': SUPA.key,
-      'Authorization': 'Bearer ' + SUPA.key,
-      'Prefer': 'return=representation'
+      'apikey': SUPA.key
     };
   },
-  get: function(table, params) {
-    var qs = params ? '?' + params : '';
-    return fetch(SUPA.url + '/rest/v1/' + table + qs, { headers: SUPA.hdr() })
-      .then(function(r) {
-        if (r.ok) return r.json();
-        return Promise.reject('GET ' + table + ' ' + r.status);
-      });
+  _blocked: function () {
+    return Promise.reject(new Error('SECURITY_V43_REQUIRED'));
   },
-  post: function(table, body) {
-    return fetch(SUPA.url + '/rest/v1/' + table, {
-      method: 'POST', headers: SUPA.hdr(), body: JSON.stringify(body)
-    }).then(function(r) { return r.ok ? r.json() : r.text().then(function(t){ return Promise.reject(t); }); });
-  },
-  patch: function(table, id, body) {
-    return fetch(SUPA.url + '/rest/v1/' + table + '?id=eq.' + id, {
-      method: 'PATCH', headers: SUPA.hdr(), body: JSON.stringify(body)
-    }).then(function(r) { return r.ok ? r.json() : Promise.reject('PATCH ' + r.status); });
-  },
-  del: function(table, id) {
-    return fetch(SUPA.url + '/rest/v1/' + table + '?id=eq.' + id, {
-      method: 'DELETE', headers: SUPA.hdr()
-    }).then(function(r) { return r.ok; });
-  },
-  upload: function(bucket, path, blob) {
-    return fetch(SUPA.url + '/storage/v1/object/' + bucket + '/' + path, {
-      method: 'POST',
-      headers: { 'apikey': SUPA.key, 'Authorization': 'Bearer ' + SUPA.key, 'Content-Type': blob.type }
-    }).then(function(r) {
-      if (!r.ok) return r.text().then(function(t){ return Promise.reject(t); });
-      return SUPA.url + '/storage/v1/object/public/' + bucket + '/' + path;
-    });
-  },
-  pubUrl: function(bucket, path) {
-    return SUPA.url + '/storage/v1/object/public/' + bucket + '/' + path;
-  }
+  get: function () { return SUPA._blocked(); },
+  post: function () { return SUPA._blocked(); },
+  patch: function () { return SUPA._blocked(); },
+  del: function () { return SUPA._blocked(); },
+  upload: function () { return SUPA._blocked(); },
+  pubUrl: function () { return ''; }
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -956,16 +928,20 @@ function saveLocalConfig() {
 function loadLocalConfig() {
   try { return JSON.parse(localStorage.getItem('rl3-cfg')); } catch(e){ return null; }
 }
+function clearSensitiveLocalCache() {
+  ['rl3-sig', 'rl3-rep', 'rl3-queue'].forEach(function (key) {
+    try { localStorage.removeItem(key); } catch (e) {}
+  });
+}
 function loadLocalCache() {
-  try { STATE.signalements = JSON.parse(localStorage.getItem('rl3-sig') || '[]'); } catch(e){}
-  try { STATE.reparations  = JSON.parse(localStorage.getItem('rl3-rep') || '[]'); } catch(e){}
-  try { STATE.queue        = JSON.parse(localStorage.getItem('rl3-queue') || '[]'); } catch(e){}
+  clearSensitiveLocalCache();
+  STATE.signalements = [];
+  STATE.reparations = [];
+  STATE.queue = [];
   computeNextNum();
 }
 function saveLocalCache() {
-  localStorage.setItem('rl3-sig', JSON.stringify(STATE.signalements));
-  localStorage.setItem('rl3-rep', JSON.stringify(STATE.reparations));
-  localStorage.setItem('rl3-queue', JSON.stringify(STATE.queue));
+  clearSensitiveLocalCache();
 }
 function computeNextNum() {
   var yr = new Date().getFullYear(), max = 0;
@@ -1678,16 +1654,10 @@ function exportJSON() {
    PURGE
 ═══════════════════════════════════════════════════════════════ */
 function purgeData() {
-  if(!confirm('Effacer TOUTES les données locales et sur Supabase ?\nCette action est IRRÉVERSIBLE.')) return;
-  STATE.signalements=[]; STATE.reparations=[]; STATE.queue=[]; STATE.nextNum=1;
-  localStorage.removeItem('rl3-sig'); localStorage.removeItem('rl3-rep'); localStorage.removeItem('rl3-queue');
-  if(STATE.online) {
-    Promise.all([
-      fetch(SUPA.url+'/rest/v1/reparations?id=neq.0',{method:'DELETE',headers:SUPA.hdr()}),
-      fetch(SUPA.url+'/rest/v1/signalements?id=neq.0',{method:'DELETE',headers:SUPA.hdr()})
-    ]).catch(function(){});
-  }
-  refreshAll(); toast('Toutes les données ont été effacées.');
+  toast(
+    'Purge globale désactivée en V4.3. Une suppression massive doit être réalisée uniquement depuis Supabase avec sauvegarde préalable.',
+    true
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════
