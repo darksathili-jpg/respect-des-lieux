@@ -90,7 +90,30 @@ D'autres facteurs de fragilité ont été identifiés :
 - confirmation explicite avant export de données personnelles ;
 - limites des champs reflétées dans les formulaires et dans PostgreSQL.
 
-## 4. Épreuve de charge réalisée
+## 4. Garde-fou automatique de non-régression
+
+Le dépôt contient désormais :
+
+- `tests/v43-guard.mjs` ;
+- `.github/workflows/v43-reliability-guard.yml`.
+
+Le workflow s'exécute automatiquement à chaque push sur `main` et sur les pull requests. Il bloque notamment le retour des régressions suivantes :
+
+- `setInterval()` de polling ;
+- `fetch()` direct dans le code principal ;
+- cache métier persistant dans `localStorage` ;
+- purge REST globale ;
+- génération des ID ou numéros de dossier dans le navigateur ;
+- clé `service_role` / `sb_secret_...` dans le frontend ;
+- ancien hotfix V4.2 ;
+- désactivation de RLS dans le schéma ;
+- droits `DELETE` ou `TRUNCATE` accordés au rôle navigateur ;
+- bucket photo public ;
+- disparition des limites Storage, de la liste blanche Auth, des séquences serveur ou de `RL_DIAG`.
+
+Ce contrôle ne remplace pas les tests fonctionnels, mais il transforme les règles qui ont empêché l'incident en **invariants vérifiés par CI**.
+
+## 5. Épreuve de charge réalisée
 
 Le test a temporairement injecté **5 000 signalements** et **10 000 réparations**, puis a exécuté les deux requêtes correspondant au chargement de l'application. Les données synthétiques ont ensuite été supprimées et le retour à zéro a été vérifié.
 
@@ -114,7 +137,7 @@ Test effectué sur cache chaud, côté PostgreSQL uniquement. Il ne représente 
 
 Ces résultats montrent que les requêtes métier sont correctement indexées à ce volume. Ils ne garantissent pas la tenue à une charge arbitraire : le plan Free reste une instance Nano à ressources partagées.
 
-## 5. Contrôles PostgreSQL après le test
+## 6. Contrôles PostgreSQL après le test
 
 - cache hit : **99,846 %** ;
 - fichiers temporaires : **0** ;
@@ -125,7 +148,7 @@ Ces résultats montrent que les requêtes métier sont correctement indexées à
 - tuples morts signalés après autovacuum : **0** ;
 - données synthétiques restantes : **0 signalement / 0 réparation**.
 
-## 6. Test d'autorisation réel au niveau PostgreSQL
+## 7. Test d'autorisation réel au niveau PostgreSQL
 
 Une transaction de validation a été exécutée en assumant le rôle `authenticated` avec l'adresse autorisée.
 
@@ -139,7 +162,7 @@ Résultat :
 
 Les lignes de test ont ensuite été supprimées et, puisque la base métier était encore vide, les séquences et le compteur annuel ont été remis à leur état initial. Contrôle final : **0 signalement / 0 réparation / 0 compteur consommé**.
 
-## 7. Fenêtre de données et garde-fou
+## 8. Fenêtre de données et garde-fou
 
 Pour protéger le projet Free, l'application charge actuellement au maximum :
 
@@ -152,7 +175,7 @@ Une ligne sentinelle supplémentaire est demandée afin de détecter une troncat
 
 Cette limite est volontaire : elle empêche qu'une croissance de la base augmente indéfiniment le coût de chaque ouverture.
 
-## 8. Diagnostic navigateur
+## 9. Diagnostic navigateur
 
 Après connexion, ouvrir la console du navigateur et exécuter :
 
@@ -168,7 +191,7 @@ Points importants :
 - `requests` ne doit **pas augmenter périodiquement** lorsque l'onglet reste inactif ;
 - `dataWindowExceeded` doit rester `false`.
 
-## 9. Seuils opérationnels recommandés
+## 10. Seuils opérationnels recommandés
 
 | Indicateur | Surveillance | Action |
 |---|---|---|
@@ -182,7 +205,7 @@ Points importants :
 
 Supabase indique qu'un `Disk IO % consumed` supérieur à 1 % signifie que le workload a dépassé le débit I/O de base à un moment de la journée ; 100 % signifie que le budget de burst est épuisé.
 
-## 10. Sauvegarde et reprise
+## 11. Sauvegarde et reprise
 
 La V4.3 protège mieux contre les erreurs applicatives, mais elle ne remplace pas une sauvegarde indépendante.
 
@@ -197,7 +220,7 @@ Pour le plan Free :
 
 Pour une sauvegarde technique complète, utiliser les outils Supabase CLI (`db dump` pour PostgreSQL et copie du bucket Storage) depuis un poste d'administration sécurisé.
 
-## 11. Limite connue du plan Free
+## 12. Limite connue du plan Free
 
 Le Security Advisor peut signaler **Leaked Password Protection Disabled**. La documentation Supabase précise que la protection automatique contre les mots de passe présents dans Have I Been Pwned est disponible à partir du plan Pro.
 
@@ -205,14 +228,14 @@ Sur le plan Free, utiliser un mot de passe long, unique et généré par un gest
 
 Référence : https://supabase.com/docs/guides/auth/password-security
 
-## 12. Références Supabase
+## 13. Références Supabase
 
 - Compute et I/O : https://supabase.com/docs/guides/platform/compute-and-disk
 - Sécurité des mots de passe : https://supabase.com/docs/guides/auth/password-security
 - Row Level Security : https://supabase.com/docs/guides/database/postgres/row-level-security
 - Sécurité Storage : https://supabase.com/docs/guides/storage/security/access-control
 
-## 13. État de sortie du Reliability Gate
+## 14. État de sortie du Reliability Gate
 
 V4.3 élimine les mécanismes identifiés comme dangereux dans l'incident précédent :
 
