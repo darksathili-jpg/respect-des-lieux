@@ -711,7 +711,13 @@
     });
 
     options.headers = headers;
-    var r = await fetchWithTimeout(url, options, NETWORK_TIMEOUT_MS);
+    var r;
+    try {
+      r = await fetchWithTimeout(url, options, NETWORK_TIMEOUT_MS);
+    } catch (networkErr) {
+      if (typeof setOnline === 'function') setOnline(false);
+      throw networkErr;
+    }
 
     if (r.status === 401 && retry && AUTH.refreshToken) {
       await AUTH.refresh();
@@ -888,7 +894,6 @@
   async function lowIoRefresh(force) {
     if (!AUTH.accessToken) return false;
     if (!force && document.visibilityState === 'hidden') return false;
-    if (typeof window.STATE !== 'undefined' && !STATE.online && !force) return false;
     if (dataRefreshPromise) {
       await dataRefreshPromise;
       return true;
@@ -905,6 +910,7 @@
       return true;
     } catch (e) {
       console.warn('V4.3 — actualisation différée:', e.message || e);
+      if (typeof setOnline === 'function') setOnline(false);
       return false;
     } finally {
       if (typeof setSyncing === 'function') setSyncing(false);
