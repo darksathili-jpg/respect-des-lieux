@@ -780,16 +780,10 @@
       return r.json();
     };
 
-    SUPA.del = async function (table, id) {
-      var r = await secureFetch(
-        SUPA.url + '/rest/v1/' + table + '?id=eq.' + encodeURIComponent(id),
-        {
-          method: 'DELETE',
-          headers: SUPA.hdr()
-        }
+    SUPA.del = async function () {
+      throw new Error(
+        'Suppression désactivée en V4.3. Utilisez une procédure administrateur avec sauvegarde préalable.'
       );
-      if (!r.ok) throw new Error('DELETE ' + r.status);
-      return true;
     };
 
     SUPA.upload = async function (bucket, path, blob) {
