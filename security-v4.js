@@ -534,16 +534,16 @@
         '<form id="rl-password-setup-form">' +
           '<div class="rl-pass-field">' +
             '<label for="rl-new-password">Nouveau mot de passe</label>' +
-            '<input id="rl-new-password" type="password" autocomplete="new-password" minlength="8" required>' +
+            '<input id="rl-new-password" type="password" autocomplete="new-password" minlength="12" required>' +
           '</div>' +
           '<div class="rl-pass-field">' +
             '<label for="rl-new-password-confirm">Confirmer le mot de passe</label>' +
-            '<input id="rl-new-password-confirm" type="password" autocomplete="new-password" minlength="8" required>' +
+            '<input id="rl-new-password-confirm" type="password" autocomplete="new-password" minlength="12" required>' +
           '</div>' +
           '<button id="rl-pass-submit" class="rl-pass-btn" type="submit">Créer mon mot de passe</button>' +
           '<div id="rl-pass-msg" class="rl-pass-msg"></div>' +
         '</form>' +
-        '<div class="rl-pass-foot">Le mot de passe est transmis directement à Supabase via HTTPS et n’est pas enregistré dans l’application.</div>' +
+        '<div class="rl-pass-foot">Utilisez un mot de passe unique d’au moins 12 caractères. Il est transmis directement à Supabase via HTTPS et n’est pas enregistré dans l’application.</div>' +
       '</div>';
 
     document.body.appendChild(screen);
@@ -559,9 +559,9 @@
       msg.className = 'rl-pass-msg';
       msg.textContent = '';
 
-      if (p1.length < 8) {
+      if (p1.length < 12) {
         msg.className = 'rl-pass-msg err';
-        msg.textContent = 'Choisissez un mot de passe d’au moins 8 caractères.';
+        msg.textContent = 'Choisissez un mot de passe unique d’au moins 12 caractères.';
         return;
       }
 
