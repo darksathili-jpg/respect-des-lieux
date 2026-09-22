@@ -772,7 +772,7 @@ var setupStep = 0;
 
 
 var SQL_SCRIPT = [
-  '-- Respect des Lieux V4.2',
+  '-- Respect des Lieux V4.3',
   '-- Le schéma de production est versionné dans supabase_secure_v4.sql.',
   '-- RLS doit rester ACTIVÉ. Ne désactivez jamais Row Level Security.',
   '-- Utilisez le fichier supabase_secure_v4.sql du dépôt GitHub.',
@@ -814,9 +814,8 @@ function loadConfigFile(input) {
       if (cfg.etablissement) STATE.config.etab = cfg.etablissement;
       if (cfg.cpe)           STATE.config.cpe  = cfg.cpe;
       saveLocalConfig();
-      document.getElementById('setup-screen').classList.add('hidden');
-      document.getElementById('loading-overlay').classList.remove('hidden');
-      startApp();
+      // V4.3 : un seul chemin d'initialisation, repris par secureBoot au rechargement.
+      window.location.reload();
     } catch(err) {
       toast('Erreur de lecture du config.json : ' + err.message, true);
     }
@@ -906,16 +905,15 @@ function finishSetup() {
   STATE.config.etab = etab;
   STATE.config.cpe  = cpe;
   saveLocalConfig();
-  document.getElementById('setup-screen').classList.add('hidden');
-  document.getElementById('loading-overlay').classList.remove('hidden');
-  startApp();
+  // V4.3 : un seul chemin d'initialisation, repris par secureBoot au rechargement.
+  window.location.reload();
 }
 
 function reconfig() {
-
-  setupStep = 0;
-  renderSetupStep();
-  document.getElementById('setup-screen').classList.remove('hidden');
+  toast(
+    'Backend verrouillé en V4.3. La configuration de production est définie dans config.js.',
+    true
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -953,6 +951,36 @@ function startApp() {
     'Le module de sécurité V4.3 n’est pas chargé. Synchronisation bloquée par sécurité. Rechargez la page.'
   );
   return Promise.resolve(false);
+}
+
+function showSupaError(message) {
+  var old = document.getElementById('supa-error-banner');
+  if (old) old.remove();
+
+  var banner = document.createElement('div');
+  banner.id = 'supa-error-banner';
+  banner.style.cssText =
+    'position:fixed;top:0;left:0;right:0;z-index:10000;' +
+    'display:flex;gap:12px;align-items:center;justify-content:center;' +
+    'padding:12px 16px;background:#b45151;color:#fff;' +
+    'font-family:Nunito,Arial,sans-serif;font-size:13px;font-weight:700;';
+
+  var text = document.createElement('span');
+  text.textContent = String(message || 'Connexion Supabase indisponible.');
+
+  var retry = document.createElement('button');
+  retry.type = 'button';
+  retry.textContent = 'Réessayer';
+  retry.style.cssText =
+    'border:0;border-radius:7px;padding:6px 11px;background:#fff;' +
+    'color:#8f3f3f;font-weight:800;cursor:pointer;';
+  retry.addEventListener('click', function () {
+    window.location.reload();
+  });
+
+  banner.appendChild(text);
+  banner.appendChild(retry);
+  document.body.appendChild(banner);
 }
 
 /* Distingue : ok / bad-key / no-tables / offline
