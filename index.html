@@ -1412,6 +1412,11 @@ async function saveCloture(repId) {
     if (field.dataset.field === 'cloture') cloture = field.innerText.trim();
   });
 
+  if (notes.length > 3000 || cloture.length > 3000) {
+    toast('Les notes et la clôture sont limitées à 3000 caractères chacune.', true);
+    return;
+  }
+
   var patch = { notes: notes, cloture: cloture };
 
   try {
