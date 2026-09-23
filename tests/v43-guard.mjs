@@ -111,6 +111,16 @@ expect(
   !/v4-2-hotfix/i.test(html + security + config),
   'la couche hotfix V4.2 obsolète ne doit pas réapparaître'
 );
+expect(
+  config.includes('function removeLegacySetupUi()') &&
+  config.includes('#setup-screen{display:none!important}'),
+  'l’ancien assistant Supabase doit rester absent de l’interface de production'
+);
+expect(
+  config.includes('window.loadConfigFile = productionOnlyMessage') &&
+  config.includes('aucun fichier config.json n’est nécessaire'),
+  'le chargement manuel de config.json doit rester neutralisé en production'
+);
 
 const configPos = html.indexOf("<script src='./config.js'></script>");
 const securityPos = html.indexOf("<script src='./security-v4.js'></script>");
