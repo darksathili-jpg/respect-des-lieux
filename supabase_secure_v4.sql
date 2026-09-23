@@ -1,21 +1,17 @@
 -- ============================================================
 -- RESPECT DES LIEUX — SUPABASE SECURE V4.3
 -- ============================================================
--- Reproduit l'architecture de production du projet
--- respect-des-lieux-v2.
---
--- Principes V4.3 :
--- - RLS reste ACTIVE ;
--- - aucun accès métier au rôle anon ;
--- - seuls les e-mails explicitement autorisés peuvent créer
---   un compte Auth et lire/écrire les données ;
--- - aucune suppression métier n'est accordée au navigateur ;
--- - photos privées, JPEG uniquement, 3 Mo maximum, 2 par dossier ;
--- - longueurs de texte bornées côté base ;
--- - contraintes et index nécessaires aux requêtes du front.
+-- Schéma reproductible du projet respect-des-lieux-v2.
+-- Principes : RLS actif, aucun accès métier anonyme, aucun DELETE
+-- navigateur, photos privées bornées, identifiants générés serveur.
 -- ============================================================
 
 begin;
+
+create schema if not exists private;
+revoke all on schema private from public;
+revoke all on schema private from anon;
+grant usage on schema private to authenticated;
 
 create table if not exists public.authorized_users (
   email text primary key,
@@ -49,11 +45,6 @@ to authenticated
 using (
   lower(email) = lower(coalesce((select auth.jwt())->>'email',''))
 );
-
-create schema if not exists private;
-revoke all on schema private from public;
-revoke all on schema private from anon;
-grant usage on schema private to authenticated;
 
 create or replace function private.is_authorized_user()
 returns boolean
@@ -141,7 +132,7 @@ create table if not exists public.reparations (
 create sequence if not exists public.signalements_id_seq as bigint;
 create sequence if not exists public.reparations_id_seq as bigint;
 
-do $
+do $$
 declare
   v bigint;
 begin
@@ -158,7 +149,7 @@ begin
   else
     perform setval('public.reparations_id_seq', v, true);
   end if;
-end $;
+end $$;
 
 alter table public.signalements
   alter column id set default nextval('public.signalements_id_seq');
@@ -193,7 +184,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = private, public, pg_temp
-as $
+as $$
 declare
   y integer;
   n bigint;
@@ -209,7 +200,7 @@ begin
   new.num := y::text || '-' || lpad(n::text, 4, '0');
   return new;
 end;
-$;
+$$;
 
 revoke all on function private.assign_signalement_num() from public;
 revoke all on function private.assign_signalement_num() from anon;
@@ -233,50 +224,35 @@ alter table public.signalements
   add constraint signalements_max_two_photos
     check (coalesce(cardinality(photos_urls), 0) <= 2),
   drop constraint if exists signalements_num_length,
-  add constraint signalements_num_length
-    check (num is null or char_length(num) <= 32),
+  add constraint signalements_num_length check (char_length(num) <= 32),
   drop constraint if exists signalements_date_length,
-  add constraint signalements_date_length
-    check (date is null or char_length(date) <= 10),
+  add constraint signalements_date_length check (char_length(date) <= 10),
   drop constraint if exists signalements_heure_length,
-  add constraint signalements_heure_length
-    check (heure is null or char_length(heure) <= 8),
+  add constraint signalements_heure_length check (heure is null or char_length(heure) <= 8),
   drop constraint if exists signalements_lieu_length,
-  add constraint signalements_lieu_length
-    check (lieu is null or char_length(lieu) <= 120),
+  add constraint signalements_lieu_length check (char_length(lieu) <= 120),
   drop constraint if exists signalements_type_length,
-  add constraint signalements_type_length
-    check (type is null or char_length(type) <= 120),
+  add constraint signalements_type_length check (type is null or char_length(type) <= 120),
   drop constraint if exists signalements_gravite_length,
-  add constraint signalements_gravite_length
-    check (gravite is null or char_length(gravite) <= 32),
+  add constraint signalements_gravite_length check (gravite is null or char_length(gravite) <= 32),
   drop constraint if exists signalements_signale_par_length,
-  add constraint signalements_signale_par_length
-    check (signale_par is null or char_length(signale_par) <= 80),
+  add constraint signalements_signale_par_length check (signale_par is null or char_length(signale_par) <= 80),
   drop constraint if exists signalements_description_length,
-  add constraint signalements_description_length
-    check (description is null or char_length(description) <= 2000),
+  add constraint signalements_description_length check (description is null or char_length(description) <= 2000),
   drop constraint if exists signalements_eleve_length,
-  add constraint signalements_eleve_length
-    check (eleve is null or char_length(eleve) <= 160),
+  add constraint signalements_eleve_length check (eleve is null or char_length(eleve) <= 160),
   drop constraint if exists signalements_classe_length,
-  add constraint signalements_classe_length
-    check (classe is null or char_length(classe) <= 64),
+  add constraint signalements_classe_length check (classe is null or char_length(classe) <= 64),
   drop constraint if exists signalements_famille_length,
-  add constraint signalements_famille_length
-    check (famille is null or char_length(famille) <= 16),
+  add constraint signalements_famille_length check (famille is null or char_length(famille) <= 16),
   drop constraint if exists signalements_statut_length,
-  add constraint signalements_statut_length
-    check (char_length(statut) <= 32),
+  add constraint signalements_statut_length check (char_length(statut) <= 32),
   drop constraint if exists signalements_gravite_values,
-  add constraint signalements_gravite_values
-    check (gravite is null or gravite in ('Mineure','Moyenne','Grave')),
+  add constraint signalements_gravite_values check (gravite is null or gravite in ('Mineure','Moyenne','Grave')),
   drop constraint if exists signalements_famille_values,
-  add constraint signalements_famille_values
-    check (famille is null or famille in ('oui','non')),
+  add constraint signalements_famille_values check (famille is null or famille in ('oui','non')),
   drop constraint if exists signalements_statut_values,
-  add constraint signalements_statut_values
-    check (statut in ('Ouvert','En réparation','Clos'));
+  add constraint signalements_statut_values check (statut in ('Ouvert','En réparation','Clos'));
 
 alter table public.reparations
   alter column signa_id set not null,
@@ -285,29 +261,21 @@ alter table public.reparations
   alter column debut set not null,
   alter column statut set not null,
   drop constraint if exists reparations_mesure_length,
-  add constraint reparations_mesure_length
-    check (mesure is null or char_length(mesure) <= 200),
+  add constraint reparations_mesure_length check (char_length(mesure) <= 200),
   drop constraint if exists reparations_referent_length,
-  add constraint reparations_referent_length
-    check (referent is null or char_length(referent) <= 160),
+  add constraint reparations_referent_length check (char_length(referent) <= 160),
   drop constraint if exists reparations_debut_length,
-  add constraint reparations_debut_length
-    check (debut is null or char_length(debut) <= 10),
+  add constraint reparations_debut_length check (char_length(debut) <= 10),
   drop constraint if exists reparations_duree_length,
-  add constraint reparations_duree_length
-    check (duree is null or char_length(duree) <= 120),
+  add constraint reparations_duree_length check (duree is null or char_length(duree) <= 120),
   drop constraint if exists reparations_notes_length,
-  add constraint reparations_notes_length
-    check (notes is null or char_length(notes) <= 3000),
+  add constraint reparations_notes_length check (notes is null or char_length(notes) <= 3000),
   drop constraint if exists reparations_cloture_length,
-  add constraint reparations_cloture_length
-    check (cloture is null or char_length(cloture) <= 3000),
+  add constraint reparations_cloture_length check (cloture is null or char_length(cloture) <= 3000),
   drop constraint if exists reparations_statut_length,
-  add constraint reparations_statut_length
-    check (char_length(statut) <= 32),
+  add constraint reparations_statut_length check (char_length(statut) <= 32),
   drop constraint if exists reparations_statut_values,
-  add constraint reparations_statut_values
-    check (statut in ('En cours','Terminée'));
+  add constraint reparations_statut_values check (statut in ('En cours','Terminée'));
 
 do $$
 begin
@@ -392,10 +360,8 @@ drop index if exists public.reparations_statut_idx;
 
 create index if not exists signalements_date_idx
   on public.signalements (date desc);
-
 create index if not exists reparations_created_at_idx
   on public.reparations (created_at desc);
-
 create index if not exists reparations_signa_id_idx
   on public.reparations (signa_id);
 
