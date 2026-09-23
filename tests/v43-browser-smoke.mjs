@@ -3,6 +3,7 @@ import { chromium } from 'playwright';
 const APP_URL = 'https://darksathili-jpg.github.io/respect-des-lieux/';
 const SUPABASE_HOST = 'odrussbhwyvyudmybjxy.supabase.co';
 const IDLE_MS = 35_000;
+const DEPLOY_WAIT_MS = 120_000;
 
 const fail = (message, details = '') => {
   console.error('V4.3 BROWSER SMOKE FAIL:', message);
@@ -10,12 +11,61 @@ const fail = (message, details = '') => {
   process.exitCode = 1;
 };
 
+async function openCurrentProduction(page) {
+  const deadline = Date.now() + DEPLOY_WAIT_MS;
+  let lastState = null;
+
+  while (Date.now() < deadline) {
+    const url = APP_URL + '?ci=' + Date.now();
+    const response = await page.goto(url, { waitUntil: 'networkidle', timeout: 60_000 });
+
+    if (!response || !response.ok()) {
+      lastState = { http: response ? response.status() : null };
+      await page.waitForTimeout(5_000);
+      continue;
+    }
+
+    try {
+      await page.waitForFunction(() => window.RL_DIAG && window.RL_BACKEND, null, { timeout: 20_000 });
+      await page.waitForSelector('#rl-auth-screen.open', { timeout: 20_000 });
+    } catch (error) {
+      lastState = { runtimeReady: false, error: String(error) };
+      await page.waitForTimeout(5_000);
+      continue;
+    }
+
+    lastState = await page.evaluate(() => ({
+      productionLock: !!document.getElementById('rl-v43-production-lock'),
+      setupExists: !!document.querySelector('#setup-screen'),
+      legacyConfigInputExists: !!document.querySelector('input[type="file"][onchange*="loadConfigFile"]'),
+      backend: window.RL_BACKEND?.projectRef || null,
+      version: window.RL_DIAG?.snapshot?.().version || null
+    }));
+
+    if (
+      lastState.productionLock &&
+      !lastState.setupExists &&
+      !lastState.legacyConfigInputExists &&
+      lastState.backend === 'odrussbhwyvyudmybjxy' &&
+      lastState.version === '4.3'
+    ) {
+      return response;
+    }
+
+    console.log('GitHub Pages encore sur une version précédente, nouvelle tentative...', lastState);
+    await page.waitForTimeout(5_000);
+  }
+
+  throw new Error('GitHub Pages n’a pas exposé la version V4.3 attendue dans le délai imparti: ' + JSON.stringify(lastState));
+}
+
 const browser = await chromium.launch({ headless: true });
 
 try {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
-    serviceWorkers: 'block'
+    serviceWorkers: 'block',
+    extraHTTPHeaders: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
   });
 
   const page = await context.newPage();
@@ -33,13 +83,7 @@ try {
     }
   });
 
-  const response = await page.goto(APP_URL, { waitUntil: 'networkidle', timeout: 60_000 });
-  if (!response || !response.ok()) {
-    fail('GitHub Pages ne répond pas correctement', response ? `HTTP ${response.status()}` : 'pas de réponse');
-  }
-
-  await page.waitForFunction(() => window.RL_DIAG && window.RL_BACKEND, null, { timeout: 20_000 });
-  await page.waitForSelector('#rl-auth-screen.open', { timeout: 20_000 });
+  await openCurrentProduction(page);
 
   const initial = await page.evaluate(() => ({
     title: document.title,
@@ -83,9 +127,7 @@ try {
   page2.on('request', (req) => {
     if (req.url().includes(SUPABASE_HOST)) page2Supabase.push(req.url());
   });
-  await page2.goto(APP_URL, { waitUntil: 'networkidle', timeout: 60_000 });
-  await page2.waitForFunction(() => window.RL_DIAG && window.RL_BACKEND, null, { timeout: 20_000 });
-  await page2.waitForSelector('#rl-auth-screen.open', { timeout: 20_000 });
+  await openCurrentProduction(page2);
   const page2State = await page2.evaluate(() => ({
     requests: window.RL_DIAG.snapshot().requests,
     setupExists: !!document.querySelector('#setup-screen')
