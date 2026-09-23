@@ -21,3 +21,6 @@ jobs:
 
       - name: V4.3 regression guard
         run: node tests/v43-guard.mjs
+
+      - name: SQL reproducibility guard
+        run: node tests/sql-repro-guard.mjs
