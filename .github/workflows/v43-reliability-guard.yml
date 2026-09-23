@@ -24,3 +24,18 @@ jobs:
 
       - name: SQL reproducibility guard
         run: node tests/sql-repro-guard.mjs
+
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Live GitHub Pages smoke test
+        run: node tests/v43-browser-smoke.mjs
