@@ -47,13 +47,19 @@ try {
     version: window.RL_DIAG?.snapshot?.().version || null,
     diag: window.RL_DIAG?.snapshot?.() || null,
     authVisible: document.querySelector('#rl-auth-screen')?.classList.contains('open') || false,
-    mainDisplay: getComputedStyle(document.querySelector('#main-app')).display
+    mainDisplay: getComputedStyle(document.querySelector('#main-app')).display,
+    setupExists: !!document.querySelector('#setup-screen'),
+    legacyConfigInputExists: !!document.querySelector('input[type="file"][onchange*="loadConfigFile"]'),
+    legacyReconfigControlExists: !!document.querySelector('[onclick*="reconfig("]')
   }));
 
   if (initial.backend !== 'odrussbhwyvyudmybjxy') fail('backend inattendu', JSON.stringify(initial));
   if (initial.version !== '4.3') fail('version runtime différente de 4.3', JSON.stringify(initial));
   if (!initial.authVisible) fail('écran Auth non visible sans session', JSON.stringify(initial));
   if (initial.mainDisplay !== 'none') fail('application métier visible avant authentification', JSON.stringify(initial));
+  if (initial.setupExists) fail('ancien assistant Supabase encore présent dans le DOM', JSON.stringify(initial));
+  if (initial.legacyConfigInputExists) fail('ancien import config.json encore présent dans l’interface', JSON.stringify(initial));
+  if (initial.legacyReconfigControlExists) fail('ancien contrôle de reconfiguration encore présent dans l’interface', JSON.stringify(initial));
 
   const restBefore = supabaseRequests.filter((r) => /\/rest\/v1\/|\/storage\/v1\//.test(r.url)).length;
   const requestsBefore = initial.diag?.requests ?? null;
@@ -80,12 +86,18 @@ try {
   await page2.goto(APP_URL, { waitUntil: 'networkidle', timeout: 60_000 });
   await page2.waitForFunction(() => window.RL_DIAG && window.RL_BACKEND, null, { timeout: 20_000 });
   await page2.waitForSelector('#rl-auth-screen.open', { timeout: 20_000 });
-  const page2Before = await page2.evaluate(() => window.RL_DIAG.snapshot().requests);
+  const page2State = await page2.evaluate(() => ({
+    requests: window.RL_DIAG.snapshot().requests,
+    setupExists: !!document.querySelector('#setup-screen')
+  }));
   await page2.waitForTimeout(5_000);
   const page2After = await page2.evaluate(() => window.RL_DIAG.snapshot().requests);
 
-  if (page2After !== page2Before) {
-    fail('deuxième onglet : activité réseau périodique détectée sans session', JSON.stringify({ page2Before, page2After, page2Supabase }, null, 2));
+  if (page2After !== page2State.requests) {
+    fail('deuxième onglet : activité réseau périodique détectée sans session', JSON.stringify({ page2State, page2After, page2Supabase }, null, 2));
+  }
+  if (page2State.setupExists) {
+    fail('deuxième onglet : ancien assistant Supabase encore présent');
   }
 
   if (pageErrors.length) fail('erreurs JavaScript non gérées', pageErrors.join('\n'));
